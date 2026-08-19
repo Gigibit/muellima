@@ -1,0 +1,31 @@
+{% extends "school/base.html" %}
+{% load socialaccount %}
+
+{% block title %}Accedi — Muellima{% endblock %}
+
+{% block content %}
+<section class="account-card">
+    <h1>Accedi</h1>
+    <p class="account-intro">Usa il tuo account Google o Facebook per salvare il profilo e personalizzare il professore.</p>
+
+    <div class="social-login-list">
+        {% if google_login_enabled %}
+        <form method="post" action="{% provider_login_url 'google' process='login' next=request.GET.next %}">
+            {% csrf_token %}
+            <button type="submit" class="social-login-btn google-login">Continua con Google</button>
+        </form>
+        {% endif %}
+
+        {% if facebook_login_enabled %}
+        <form method="post" action="{% provider_login_url 'facebook' process='login' next=request.GET.next %}">
+            {% csrf_token %}
+            <button type="submit" class="social-login-btn facebook-login">Continua con Facebook</button>
+        </form>
+        {% endif %}
+    </div>
+
+    {% if not google_login_enabled and not facebook_login_enabled %}
+    <p class="account-warning">Configura almeno un provider OAuth nel file <code>.env</code> per abilitare l’accesso.</p>
+    {% endif %}
+</section>
+{% endblock %}

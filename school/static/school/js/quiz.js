@@ -1,5 +1,5 @@
 /**
- * Quiz manager for Personal School.
+ * Quiz manager for Muellima.
  *
  * Handles:
  *  - quiz generation via Django API

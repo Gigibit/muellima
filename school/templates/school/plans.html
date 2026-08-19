@@ -1,0 +1,38 @@
+{% extends "school/base.html" %}
+
+{% block title %}Piani — Muellima{% endblock %}
+
+{% block content %}
+<section class="plans-page">
+    <header class="plans-header">
+        <h1>Scegli il tuo piano</h1>
+        <p>Il programma e i titoli delle lezioni sono visibili gratuitamente. Serve un piano attivo per iniziare una lezione.</p>
+    </header>
+
+    {% if access_bypassed %}
+    <div class="account-warning bypass-notice">Il tuo account ha già accesso completo tramite whitelist o modalità mock.</div>
+    {% endif %}
+
+    <div class="plan-grid">
+        <article class="plan-card">
+            <h2>Base</h2>
+            <div class="plan-price">€19,99 <span>/ mese</span></div>
+            <ul><li>Lezioni vocali Realtime</li><li>Quiz di verifica</li><li>Profilo didattico personalizzato</li><li>Nessuna illustrazione generata</li></ul>
+            <form method="post" action="{% url 'create_checkout' 'base' %}">
+                {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
+                <button class="btn-primary" type="submit">Scegli Base</button>
+            </form>
+        </article>
+        <article class="plan-card plan-featured">
+            <span class="plan-badge">Completo</span>
+            <h2>Premium</h2>
+            <div class="plan-price">€45 <span>/ mese</span></div>
+            <ul><li>Tutto del piano Base</li><li>Illustrazioni educative generate</li><li>Diagrammi, timeline e formule visuali</li><li>Supporti visivi per concetti complessi</li></ul>
+            <form method="post" action="{% url 'create_checkout' 'premium' %}">
+                {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
+                <button class="btn-primary" type="submit">Scegli Premium</button>
+            </form>
+        </article>
+    </div>
+</section>
+{% endblock %}

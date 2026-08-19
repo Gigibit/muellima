@@ -58,6 +58,47 @@ body {
     font-size: 1.125rem;
 }
 
+.navbar-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.nav-link {
+    color: var(--text-muted);
+    text-decoration: none;
+    font: inherit;
+    font-size: 0.9375rem;
+    font-weight: 600;
+}
+
+.nav-link:hover { color: var(--accent); }
+.nav-button { padding: 0; border: 0; background: none; cursor: pointer; }
+
+.profile-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: var(--text);
+    text-decoration: none;
+}
+
+.profile-avatar {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: #fff;
+    background: var(--accent);
+    font-weight: 700;
+}
+
+.profile-nav-meta { display: flex; flex-direction: column; line-height: 1.15; }
+.profile-nav-label { font-size: 0.875rem; font-weight: 600; }
+.profile-nav-meta small { margin-top: 0.15rem; color: var(--text-muted); font-size: 0.6875rem; }
+
 .brand-icon { font-size: 1.5rem; }
 
 .main-content {
@@ -65,6 +106,155 @@ body {
     margin: 0 auto;
     padding: 2rem;
 }
+
+.messages { max-width: 640px; margin: 0 auto 1rem; }
+.message { padding: 0.75rem 1rem; border-radius: var(--radius-sm); }
+.message-success { color: #166534; background: var(--success-light); }
+
+/* ── Account / Profile ─────────────────────────────────────────── */
+.account-card {
+    max-width: 560px;
+    margin: 3rem auto;
+    padding: 2rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+}
+
+.account-card h1 { margin-bottom: 0.5rem; }
+.account-intro { margin-bottom: 1.5rem; color: var(--text-muted); }
+.social-login-list { display: grid; gap: 0.75rem; }
+
+.social-login-btn {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    color: var(--text);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.social-login-btn:hover { border-color: var(--accent); }
+.facebook-login { color: #1877f2; }
+.account-warning { padding: 1rem; color: #92400e; background: #fffbeb; border-radius: var(--radius-sm); }
+
+.profile-form { display: grid; gap: 1.25rem; }
+.form-field { display: grid; gap: 0.375rem; }
+.form-field label { font-weight: 600; }
+.form-field input,
+.form-field select,
+.form-field textarea {
+    width: 100%;
+    padding: 0.75rem 0.875rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    color: var(--text);
+    font: inherit;
+}
+.form-field textarea { resize: vertical; }
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus { outline: 2px solid var(--accent-light); border-color: var(--accent); }
+.field-help, .word-counter { color: var(--text-muted); font-size: 0.8125rem; }
+.field-error, .word-counter.over-limit { color: var(--danger); font-size: 0.8125rem; }
+
+.subscription-summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--accent-light);
+    border-radius: var(--radius-sm);
+}
+.subscription-summary span { color: var(--text-muted); }
+.billing-portal-form { margin: 1rem 0 0; text-align: center; }
+
+.profile-save-btn { width: 100%; }
+.profile-logout-form { margin: 0.75rem 0 0; text-align: center; }
+.profile-logout-btn {
+    padding: 0.5rem 1rem;
+    color: var(--danger);
+    background: transparent;
+    border: 0;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+.profile-logout-btn:hover { text-decoration: underline; }
+
+.subscription-section {
+    margin: 1.75rem 0;
+    padding: 1.25rem;
+    background: var(--accent-light);
+    border: 2px solid var(--accent);
+    border-radius: var(--radius);
+}
+.subscription-section h2 { font-size: 1.125rem; }
+.subscription-section > .field-help { margin-bottom: 1rem; }
+.profile-plan-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.profile-plan-option {
+    display: grid;
+    gap: 0.35rem;
+    padding: 1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+.profile-plan-option.current { border: 2px solid var(--accent); box-shadow: var(--shadow); }
+.profile-plan-option span { color: var(--text-muted); font-size: 0.8125rem; }
+.profile-plan-option button {
+    margin-top: 0.5rem;
+    padding: 0.55rem;
+    color: var(--accent);
+    background: var(--accent-light);
+    border: 0;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.profile-plan-option button:disabled { color: var(--text-muted); cursor: default; }
+
+/* ── Plans ─────────────────────────────────────────────────────── */
+.plans-page, .dashboard-page { max-width: 1000px; margin: 2rem auto; }
+.plans-header { max-width: 700px; margin: 0 auto 2rem; text-align: center; }
+.plans-header p { color: var(--text-muted); }
+.bypass-notice { max-width: 700px; margin: 0 auto 1.5rem; }
+.plan-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
+.plan-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 2rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+}
+.plan-featured { border: 2px solid var(--accent); }
+.plan-badge { position: absolute; top: 1rem; right: 1rem; color: var(--accent); font-weight: 700; }
+.plan-price { margin: 1rem 0; font-size: 2rem; font-weight: 800; }
+.plan-price span { color: var(--text-muted); font-size: 0.875rem; font-weight: 500; }
+.plan-card ul { margin: 0 0 1.5rem 1.25rem; color: var(--text-muted); }
+.plan-card form { margin-top: auto; }
+.plan-card form .btn-primary { width: 100%; }
+
+/* ── Staff dashboard ───────────────────────────────────────────── */
+.dashboard-page h1, .dashboard-page h2 { margin-bottom: 1rem; }
+.dashboard-page h2 { margin-top: 2rem; }
+.metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.metric-card { padding: 1.25rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.metric-card span { display: block; color: var(--text-muted); font-size: 0.8125rem; }
+.metric-card strong { font-size: 1.5rem; }
+.table-wrap { overflow-x: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.admin-table th, .admin-table td { padding: 0.75rem; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+.admin-table th { color: var(--text-muted); }
 
 /* ── Home / Hero ────────────────────────────────────────────────── 
 */
@@ -852,4 +1042,9 @@ background: var(--danger); }
     .control-btn { min-width: 140px; }
     .professor-avatar-wrap { width: 120px; height: 120px; }
     .quiz-modal-content { max-height: 95vh; }
+    .plan-grid, .metric-grid { grid-template-columns: 1fr; }
+    .navbar { padding: 0.75rem 1rem; }
+    .navbar-actions { gap: 0.5rem; }
+    .profile-nav-meta { display: none; }
+    .profile-plan-grid { grid-template-columns: 1fr; }
 }

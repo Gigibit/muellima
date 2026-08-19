@@ -106,6 +106,7 @@ Generate a quiz for this lesson.
     )
 
     data = json.loads(response.output_text)
+    usage = response.usage
 
     # Persist to database
     quiz = Quiz.objects.create(lesson=lesson)
@@ -119,5 +120,5 @@ Generate a quiz for this lesson.
             order=idx,
         )
 
+    data["_usage"] = usage
     return data
-

@@ -1,5 +1,5 @@
 /**
- * Realtime WebRTC manager for Personal School.
+ * Realtime WebRTC manager for Muellima.
  *
  * Handles:
  *  - ephemeral key retrieval from Django backend
@@ -302,6 +302,7 @@
             // Response fully done
             case 'response.done':
                 setStatus('listening');
+                reportRealtimeUsage(data.response?.usage);
                 break;
 
             // Function call from the model (arguments complete)
@@ -319,6 +320,23 @@
                 // Silently ignore other events
                 break;
         }
+    }
+
+    function reportRealtimeUsage(usage) {
+        if (!usage) return;
+        fetch('/api/realtime/usage/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': window.PS_CSRF_TOKEN,
+            },
+            body: JSON.stringify({
+                lesson_id: currentLessonId,
+                input_tokens: usage.input_tokens || 0,
+                output_tokens: usage.output_tokens || 0,
+                total_tokens: usage.total_tokens || 0,
+            }),
+        }).catch(err => console.warn('Usage reporting failed:', err));
     }
 
     // ── Handle function calls ─────────────────────────────────────

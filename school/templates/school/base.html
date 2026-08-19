@@ -1,10 +1,10 @@
-{% load static %}
+{% load static school_extras %}
 <!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Personal School{% endblock %}</title>
+    <title>{% block title %}Muellima{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link 
@@ -17,15 +17,39 @@ rel="stylesheet">
     <nav class="navbar">
         <a href="/" class="navbar-brand">
             <span class="brand-icon">🎓</span>
-            <span class="brand-text">Personal School</span>
+            <span class="brand-text">Muellima</span>
         </a>
+        <div class="navbar-actions">
+            {% if request.user.is_authenticated %}
+                {% if request.user.is_staff %}<a href="{% url 'staff_dashboard' %}" class="nav-link">Dashboard</a>{% endif %}
+                <a href="{% url 'profile' %}" class="profile-nav" aria-label="Apri il profilo">
+                    <span class="profile-avatar">{{ request.user.school_profile.display_name|default:request.user.email|first|upper }}</span>
+                    <span class="profile-nav-meta">
+                        <span class="profile-nav-label">{{ request.user.school_profile.display_name|default:request.user.email|firstword }}</span>
+                        <small>
+                            {% if nav_access_bypassed %}Accesso completo
+                            {% elif nav_subscription.is_active %}{{ nav_subscription.plan|capfirst }}
+                            {% else %}Nessun piano{% endif %}
+                        </small>
+                    </span>
+                </a>
+            {% else %}
+                <a href="{% url 'login' %}" class="nav-link">Accedi</a>
+            {% endif %}
+        </div>
     </nav>
 
     <main class="main-content">
+        {% if messages %}
+            <div class="messages" aria-live="polite">
+                {% for message in messages %}
+                    <div class="message message-{{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
         {% block content %}{% endblock %}
     </main>
 
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>
-

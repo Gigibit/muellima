@@ -1,0 +1,40 @@
+{% extends "school/base.html" %}
+{% load school_extras %}
+
+{% block title %}Dashboard amministrativa — Muellima{% endblock %}
+
+{% block content %}
+<section class="dashboard-page">
+    <h1>Dashboard amministrativa</h1>
+    <div class="metric-grid">
+        <div class="metric-card"><span>Utenti</span><strong>{{ user_count }}</strong></div>
+        <div class="metric-card"><span>Abbonamenti attivi</span><strong>{{ active_subscriptions }}</strong></div>
+        <div class="metric-card"><span>Ricavi registrati</span><strong>€{{ revenue_cents|euros }}</strong></div>
+        <div class="metric-card"><span>Richieste AI</span><strong>{{ totals.requests|default:0 }}</strong></div>
+        <div class="metric-card"><span>Token totali</span><strong>{{ totals.total_tokens|default:0 }}</strong></div>
+        <div class="metric-card"><span>Immagini</span><strong>{{ totals.images|default:0 }}</strong></div>
+    </div>
+
+    <h2>Utilizzo per utente</h2>
+    <div class="table-wrap"><table class="admin-table">
+        <thead><tr><th>Utente</th><th>Piano</th><th>Stato</th><th>Richieste</th><th>Token</th><th>Immagini</th><th>Pagamenti</th></tr></thead>
+        <tbody>{% for user in users %}<tr>
+            <td>{{ user.email|default:user.username }}</td>
+            <td>{{ user.subscription.get_plan_display|default:"—" }}</td>
+            <td>{{ user.subscription.get_status_display|default:"—" }}</td>
+            <td>{{ user.usage_requests }}</td><td>{{ user.usage_tokens }}</td><td>{{ user.usage_images }}</td>
+            <td>€{{ user.payments_cents|euros }}</td>
+        </tr>{% empty %}<tr><td colspan="7">Nessun utente.</td></tr>{% endfor %}</tbody>
+    </table></div>
+
+    <h2>Ultimi pagamenti</h2>
+    <div class="table-wrap"><table class="admin-table">
+        <thead><tr><th>Data</th><th>Utente</th><th>Importo</th><th>Stato</th><th>Fattura Stripe</th></tr></thead>
+        <tbody>{% for payment in payments %}<tr>
+            <td>{{ payment.occurred_at|date:"d/m/Y H:i" }}</td>
+            <td>{{ payment.user.email|default:"—" }}</td><td>€{{ payment.amount_cents|euros }}</td>
+            <td>{{ payment.status }}</td><td>{{ payment.stripe_invoice_id }}</td>
+        </tr>{% empty %}<tr><td colspan="5">Nessun pagamento registrato.</td></tr>{% endfor %}</tbody>
+    </table></div>
+</section>
+{% endblock %}

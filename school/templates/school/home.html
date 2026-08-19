@@ -1,7 +1,7 @@
 {% extends "school/base.html" %}
 {% load static %}
 
-{% block title %}Personal School — Cosa vuoi imparare?{% endblock %}
+{% block title %}Muellima — Cosa vuoi imparare?{% endblock %}
 
 {% block content %}
 <section class="hero">
@@ -125,6 +125,11 @@ form.addEventListener('submit', async (e) => {
         const data = await resp.json();
         stopLoading();
 
+        if (resp.status === 401) {
+            window.location.href = '{% url "login" %}?next=/';
+            return;
+        }
+
         if (data.success && data.course_id) {
             window.location.href = `/course/${data.course_id}/`;
         } else {
@@ -152,4 +157,3 @@ document.querySelectorAll('.example-chip').forEach(chip => {
 subjectInput.addEventListener('input', hideError);
 </script>
 {% endblock %}
-

@@ -80,6 +80,7 @@ easy to understand for a beginner.
         "concept": concept,
         "visual_type": visual_type,
         "title": concept,
+        "_usage": getattr(result, "usage", None),
     }
 
 
@@ -113,4 +114,3 @@ def create_illustration(
     result = generate_image(concept, description, visual_type, client)
     result["title"] = title
     return result
-

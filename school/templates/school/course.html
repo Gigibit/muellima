@@ -1,7 +1,7 @@
 {% extends "school/base.html" %}
 {% load static %}
 
-{% block title %}{{ course.title }} — Personal School{% endblock %}
+{% block title %}{{ course.title }} — Muellima{% endblock %}
 
 {% block content %}
 <div class="course-page">
@@ -17,9 +17,8 @@
     </header>
 
     <div class="course-actions">
-        <a href="{% url 'lesson_page' course.id %}" class="btn-primary 
-btn-large">
-            Inizia a studiare →
+        <a href="{{ action_url }}" class="btn-primary btn-large">
+            {{ action_label }}
         </a>
     </div>
 
@@ -39,4 +38,3 @@ btn-large">
     </section>
 </div>
 {% endblock %}
-
