@@ -1,0 +1,127 @@
+{% extends "school/base.html" %}
+{% load static %}
+
+{% block title %}{{ course.title }} — Lezione — Personal School{% endblock %}
+
+{% block content %}
+<div class="lesson-page" data-course-id="{{ course.id }}">
+
+    <a href="{% url 'course_page' course.id %}" class="back-link">← Torna al 
+corso</a>
+
+    <!-- Lesson selector -->
+    <div class="lesson-selector">
+        <label for="lesson-combobox" class="selector-label">Seleziona 
+lezione</label>
+        <select id="lesson-combobox" class="lesson-combobox" 
+aria-label="Seleziona una lezione">
+            {% for lesson in lessons %}
+            <option value="{{ lesson.id }}">Lezione {{ lesson.order }} — {{ lesson.title }}</option>
+            {% endfor %}
+        </select>
+        <button id="start-lesson-btn" class="btn-primary" disabled>Inizia 
+lezione</button>
+    </div>
+
+    <!-- Professor area -->
+    <div class="professor-area" id="professor-area">
+        <div class="professor-avatar-wrap" id="professor-avatar-wrap">
+            <img src="{% static 'school/images/professor.svg' %}" 
+alt="Professore AI" class="professor-avatar" id="professor-avatar">
+        </div>
+        <h2 class="professor-name">Professore AI</h2>
+        <div class="professor-status" id="professor-status">
+            <span class="status-dot status-disconnected"></span>
+            <span class="status-text" id="status-text">Disconnesso</span>
+        </div>
+        <div class="waveform" id="waveform" hidden>
+            <span></span><span></span><span></span><span></span><span></span>
+        </div>
+    </div>
+
+    <div class="lesson-complete" id="lesson-complete" hidden>
+        <strong>Lezione completata</strong>
+        <p id="lesson-complete-summary">Hai coperto tutti gli argomenti previsti.</p>
+        <p>Puoi fare il quiz oppure scegliere la prossima lezione.</p>
+    </div>
+
+    <!-- Illustration area -->
+    <div class="illustration-area" id="illustration-area" hidden>
+        <div class="illustration-card">
+            <div class="illustration-header">
+                <h3 id="illustration-title">Illustrazione</h3>
+                <button class="illustration-close" id="illustration-close" 
+aria-label="Chiudi illustrazione">×</button>
+            </div>
+            <div class="illustration-loader" id="illustration-loader" hidden>
+                <div class="loading-spinner small"></div>
+                <p>Sto creando l'illustrazione...</p>
+            </div>
+            <img id="illustration-img" class="illustration-img" 
+alt="Illustrazione didattica" hidden>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="lesson-controls">
+        <button id="mic-btn" class="control-btn" disabled 
+aria-label="Microfono">
+            <span class="control-icon">🎙</span>
+            <span class="control-label">Microfono</span>
+        </button>
+        <button id="quiz-btn" class="control-btn" disabled aria-label="Quiz">
+            <span class="control-icon">📝</span>
+            <span class="control-label">Quiz</span>
+        </button>
+        <button id="end-btn" class="control-btn control-btn-danger" hidden 
+aria-label="Termina">
+            <span class="control-icon">⏹</span>
+            <span class="control-label">Termina</span>
+        </button>
+    </div>
+
+    <!-- Error toast -->
+    <div class="toast" id="toast" role="alert" hidden></div>
+</div>
+
+<!-- Quiz Modal -->
+<div class="quiz-modal" id="quiz-modal" hidden>
+    <div class="quiz-modal-content">
+        <div class="quiz-header">
+            <h2 id="quiz-title">Quiz</h2>
+            <button class="quiz-close" id="quiz-close" aria-label="Chiudi 
+quiz">×</button>
+        </div>
+        <div class="quiz-score-bar">
+            <span class="quiz-score-correct" id="quiz-correct">✓ 0</span>
+            <span class="quiz-score-wrong" id="quiz-wrong">✕ 0</span>
+            <span class="quiz-score-total" id="quiz-total">0 / 0</span>
+        </div>
+        <div class="quiz-body" id="quiz-body">
+            <div class="quiz-loading">
+                <div class="loading-spinner"></div>
+                <p>Sto preparando il quiz...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Remote audio element (hidden) -->
+<audio id="remote-audio" autoplay></audio>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Pass Django data to JS
+window.PS_COURSE_ID = {{ course.id }};
+window.PS_CSRF_TOKEN = '{{ csrf_token }}';
+window.PS_LESSONS = [
+    {% for lesson in lessons %}
+        { id: {{ lesson.id }}, order: {{ lesson.order }}, title: "{{ lesson.title|escapejs }}" },
+    {% endfor %}
+];
+</script>
+<script src="{% static 'school/js/realtime.js' %}"></script>
+<script src="{% static 'school/js/quiz.js' %}"></script>
+{% endblock %}

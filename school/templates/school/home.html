@@ -1,0 +1,155 @@
+{% extends "school/base.html" %}
+{% load static %}
+
+{% block title %}Personal School — Cosa vuoi imparare?{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div class="hero-inner">
+        <h1 class="hero-title">Cosa vuoi imparare oggi?</h1>
+        <p class="hero-subtitle">Inserisci qualsiasi materia o argomento. La 
+tua scuola AI personalizzata farà il resto.</p>
+
+        <form id="course-form" class="hero-form" autocomplete="off">
+            {% csrf_token %}
+            <input
+                type="text"
+                id="subject-input"
+                name="subject"
+                class="hero-input"
+                placeholder="Scrivi una materia o un argomento..."
+                maxlength="200"
+                required
+                aria-label="Materia o argomento da imparare"
+            >
+            <button type="submit" class="btn-primary" id="submit-btn">
+                Crea il mio corso
+            </button>
+        </form>
+
+        <div class="examples" id="examples">
+            <span class="examples-label">Prova:</span>
+            <button class="example-chip" data-subject="Fisica 
+quantistica">Fisica quantistica</button>
+            <button class="example-chip" data-subject="Storia romana">Storia 
+romana</button>
+            <button class="example-chip" data-subject="Python">Python</button>
+            <button class="example-chip" 
+data-subject="Economia">Economia</button>
+            <button class="example-chip" 
+data-subject="Marketing">Marketing</button>
+            <button class="example-chip" data-subject="Biologia 
+molecolare">Biologia molecolare</button>
+            <button class="example-chip" 
+data-subject="Fotografia">Fotografia</button>
+        </div>
+
+        <div class="error-message" id="error-message" role="alert" 
+hidden></div>
+    </div>
+
+    <div class="loading-overlay" id="loading-overlay" hidden>
+        <div class="loading-card">
+            <div class="loading-spinner"></div>
+            <h2 class="loading-title">Sto preparando il tuo corso...</h2>
+            <p class="loading-step" id="loading-step">Analizzo l'argomento</p>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CSRF_TOKEN = document.querySelector('[name=csrfmiddlewaretoken]').value;
+const form = document.getElementById('course-form');
+const subjectInput = document.getElementById('subject-input');
+const submitBtn = document.getElementById('submit-btn');
+const errorMessage = document.getElementById('error-message');
+const loadingOverlay = document.getElementById('loading-overlay');
+const loadingStep = document.getElementById('loading-step');
+
+const loadingSteps = [
+    'Analizzo l\'argomento',
+    'Creo il percorso didattico',
+    'Organizzo le lezioni',
+];
+let stepIndex = 0;
+let stepInterval = null;
+
+function startLoading() {
+    loadingOverlay.hidden = false;
+    stepIndex = 0;
+    loadingStep.textContent = loadingSteps[0];
+    stepInterval = setInterval(() => {
+        stepIndex = (stepIndex + 1) % loadingSteps.length;
+        loadingStep.textContent = loadingSteps[stepIndex];
+    }, 2500);
+}
+
+function stopLoading() {
+    loadingOverlay.hidden = true;
+    if (stepInterval) clearInterval(stepInterval);
+}
+
+function showError(msg) {
+    errorMessage.textContent = msg;
+    errorMessage.hidden = false;
+}
+
+function hideError() {
+    errorMessage.hidden = true;
+}
+
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideError();
+    const subject = subjectInput.value.trim();
+    if (!subject || subject.length < 2) {
+        showError('Inserisci una materia o un argomento valido.');
+        return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creazione...';
+    startLoading();
+
+    try {
+        const resp = await fetch('/api/courses/generate/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': CSRF_TOKEN,
+            },
+            body: JSON.stringify({ subject }),
+        });
+        const data = await resp.json();
+        stopLoading();
+
+        if (data.success && data.course_id) {
+            window.location.href = `/course/${data.course_id}/`;
+        } else {
+            const msg = data.error?.message || 'Si è verificato un errore.';
+            showError(msg);
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Crea il mio corso';
+        }
+    } catch (err) {
+        stopLoading();
+        showError('Errore di connessione. Controlla la tua rete e riprova.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Crea il mio corso';
+    }
+});
+
+// Example chips
+document.querySelectorAll('.example-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+        subjectInput.value = chip.dataset.subject;
+        subjectInput.focus();
+    });
+});
+
+subjectInput.addEventListener('input', hideError);
+</script>
+{% endblock %}
+

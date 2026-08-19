@@ -1,0 +1,42 @@
+{% extends "school/base.html" %}
+{% load static %}
+
+{% block title %}{{ course.title }} — Personal School{% endblock %}
+
+{% block content %}
+<div class="course-page">
+    <a href="/" class="back-link">← Torna alla home</a>
+
+    <header class="course-header">
+        <span class="course-badge">{{ course.get_difficulty_display }}</span>
+        <h1 class="course-title">{{ course.title }}</h1>
+        <p class="course-description">{{ course.description }}</p>
+        <div class="course-meta">
+            <span>{{ lessons|length }} lezioni</span>
+        </div>
+    </header>
+
+    <div class="course-actions">
+        <a href="{% url 'lesson_page' course.id %}" class="btn-primary 
+btn-large">
+            Inizia a studiare →
+        </a>
+    </div>
+
+    <section class="lessons-grid">
+        <h2 class="section-title">Programma del corso</h2>
+        <div class="lesson-cards">
+            {% for lesson in lessons %}
+            <article class="lesson-card">
+                <span class="lesson-number">{{ lesson.order }}</span>
+                <div class="lesson-card-body">
+                    <h3 class="lesson-card-title">{{ lesson.title }}</h3>
+                    <p class="lesson-card-summary">{{ lesson.summary|truncatewords:25 }}</p>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+{% endblock %}
+

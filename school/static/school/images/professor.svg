@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" 
+height="200">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="#eef2ff"/>
+
+  <!-- Graduation cap -->
+  <polygon points="100,35 60,55 100,75 140,55" fill="#6366f1"/>
+  <polygon points="100,35 60,55 100,75 140,55" fill="none" stroke="#4f46e5" 
+stroke-width="2"/>
+  <rect x="85" y="55" width="30" height="8" rx="2" fill="#4f46e5"/>
+  <line x1="140" y1="55" x2="140" y2="80" stroke="#4f46e5" stroke-width="2"/>
+  <circle cx="140" cy="83" r="4" fill="#fbbf24"/>
+  <line x1="135" y1="58" x2="135" y2="78" stroke="#4f46e5" stroke-width="1.5"/>
+
+  <!-- Face -->
+  <ellipse cx="100" cy="115" rx="38" ry="42" fill="#fde4cf"/>
+
+  <!-- Eyes -->
+  <circle cx="85" cy="110" r="4" fill="#1a1a2e"/>
+  <circle cx="115" cy="110" r="4" fill="#1a1a2e"/>
+  <circle cx="86" cy="109" r="1.5" fill="#fff"/>
+  <circle cx="116" cy="109" r="1.5" fill="#fff"/>
+
+  <!-- Eyebrows -->
+  <path d="M78,100 Q85,96 92,100" stroke="#1a1a2e" stroke-width="2" fill="none" 
+stroke-linecap="round"/>
+  <path d="M108,100 Q115,96 122,100" stroke="#1a1a2e" stroke-width="2" 
+fill="none" stroke-linecap="round"/>
+
+  <!-- Glasses -->
+  <circle cx="85" cy="110" r="10" fill="none" stroke="#4f46e5" 
+stroke-width="2"/>
+  <circle cx="115" cy="110" r="10" fill="none" stroke="#4f46e5" 
+stroke-width="2"/>
+  <line x1="95" y1="110" x2="105" y2="110" stroke="#4f46e5" stroke-width="2"/>
+
+  <!-- Smile -->
+  <path d="M85,130 Q100,140 115,130" stroke="#1a1a2e" stroke-width="2.5" 
+fill="none" stroke-linecap="round"/>
+
+  <!-- Blush -->
+  <circle cx="75" cy="125" r="6" fill="#fca5a5" opacity="0.5"/>
+  <circle cx="125" cy="125" r="6" fill="#fca5a5" opacity="0.5"/>
+
+  <!-- Bow tie -->
+  <polygon points="100,158 85,150 85,166" fill="#6366f1"/>
+  <polygon points="100,158 115,150 115,166" fill="#6366f1"/>
+  <circle cx="100" cy="158" r="4" fill="#4f46e5"/>
+
+  <!-- Shoulders / shirt -->
+  <path d="M55,200 Q55,165 100,165 Q145,165 145,200" fill="#6366f1"/>
+  <path d="M100,165 L100,200" stroke="#4f46e5" stroke-width="1.5"/>
+</svg>
+
