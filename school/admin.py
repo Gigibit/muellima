@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     Course,
+    CoursePurchase,
     Lesson,
     LessonSession,
     PaymentRecord,
@@ -12,6 +13,13 @@ from .models import (
     UsageRecord,
     UserProfile,
 )
+
+
+@admin.register(CoursePurchase)
+class CoursePurchaseAdmin(admin.ModelAdmin):
+    list_display = ("user", "course", "plan", "status", "purchased_at")
+    list_filter = ("plan", "status")
+    search_fields = ("user__email", "course__title", "stripe_payment_intent_id")
 
 
 @admin.register(UserProfile)

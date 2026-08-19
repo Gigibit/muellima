@@ -28,8 +28,8 @@ rel="stylesheet">
                         <span class="profile-nav-label">{{ request.user.school_profile.display_name|default:request.user.email|firstword }}</span>
                         <small>
                             {% if nav_access_bypassed %}Accesso completo
-                            {% elif nav_subscription.is_active %}{{ nav_subscription.plan|capfirst }}
-                            {% else %}Nessun piano{% endif %}
+                            {% elif nav_course_count %}{{ nav_course_count }} cors{{ nav_course_count|pluralize:"o,i" }}
+                            {% else %}5 min gratis per corso{% endif %}
                         </small>
                     </span>
                 </a>

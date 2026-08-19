@@ -222,6 +222,8 @@ body {
 
 /* ── Plans ─────────────────────────────────────────────────────── */
 .plans-page, .dashboard-page { max-width: 1000px; margin: 2rem auto; }
+.plans-page:has(.plan-grid-three) { max-width: 1180px; }
+.plan-grid.plan-grid-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .plans-header { max-width: 700px; margin: 0 auto 2rem; text-align: center; }
 .plans-header p { color: var(--text-muted); }
 .bypass-notice { max-width: 700px; margin: 0 auto 1.5rem; }
@@ -421,6 +423,104 @@ body {
 .loading-step {
     color: var(--text-muted);
     font-size: 0.9375rem;
+}
+
+/* ── Course clarification modal ────────────────────────────────── */
+.clarification-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgba(17, 24, 39, 0.5);
+    backdrop-filter: blur(5px);
+}
+
+.clarification-card {
+    position: relative;
+    width: min(560px, 100%);
+    padding: 2rem;
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    text-align: left;
+}
+
+.clarification-card h2 { margin-bottom: 0.5rem; }
+.clarification-card > p { margin-bottom: 1.25rem; color: var(--text-muted); }
+.clarification-close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.9rem;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+.clarification-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; }
+.clarification-option {
+    padding: 0.75rem 0.9rem;
+    color: var(--text);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.clarification-option:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-light); }
+
+.clarification-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 1.25rem 0;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.clarification-divider::before,
+.clarification-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+.clarification-custom label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.clarification-custom-row {
+    display: flex;
+    gap: 0.65rem;
+}
+
+.clarification-custom-row input {
+    min-width: 0;
+    flex: 1;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    color: var(--text);
+    font: inherit;
+}
+
+.clarification-custom-row input:focus {
+    border-color: var(--accent);
+    outline: 3px solid var(--accent-light);
+}
+
+.clarification-custom-row .btn-primary {
+    white-space: nowrap;
 }
 
 /* ── Course page ────────────────────────────────────────────────── 
@@ -740,6 +840,52 @@ infinite; }
     height: auto;
 }
 
+.written-example-area {
+    width: min(100%, 820px);
+    margin: 1.5rem auto;
+}
+
+.written-example-card {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--bg-card);
+    box-shadow: var(--shadow-md);
+}
+
+.written-example-card .illustration-header {
+    margin: 0;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.written-example-meta {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.written-example-content {
+    overflow-x: auto;
+    margin: 0;
+    padding: 1.25rem;
+    background: #111827;
+    color: #e5e7eb;
+    font: 0.9rem/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    white-space: pre;
+    tab-size: 4;
+}
+
+.written-example-explanation {
+    margin: 0;
+    padding: 1rem 1.25rem;
+    color: var(--text-muted);
+    line-height: 1.55;
+}
+
 /* ── Controls ──────────────────────────────────────────────────── 
 */
 .lesson-controls {
@@ -1042,9 +1188,11 @@ background: var(--danger); }
     .control-btn { min-width: 140px; }
     .professor-avatar-wrap { width: 120px; height: 120px; }
     .quiz-modal-content { max-height: 95vh; }
-    .plan-grid, .metric-grid { grid-template-columns: 1fr; }
+    .plan-grid, .plan-grid.plan-grid-three, .metric-grid { grid-template-columns: 1fr; }
     .navbar { padding: 0.75rem 1rem; }
     .navbar-actions { gap: 0.5rem; }
     .profile-nav-meta { display: none; }
     .profile-plan-grid { grid-template-columns: 1fr; }
+    .clarification-options { grid-template-columns: 1fr; }
+    .clarification-custom-row { flex-direction: column; }
 }

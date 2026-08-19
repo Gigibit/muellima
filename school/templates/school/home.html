@@ -16,12 +16,14 @@ tua scuola AI personalizzata farà il resto.</p>
                 type="text"
                 id="subject-input"
                 name="subject"
+                list="subject-suggestions"
                 class="hero-input"
                 placeholder="Scrivi una materia o un argomento..."
                 maxlength="200"
                 required
                 aria-label="Materia o argomento da imparare"
             >
+            <datalist id="subject-suggestions"></datalist>
             <button type="submit" class="btn-primary" id="submit-btn">
                 Crea il mio corso
             </button>
@@ -48,6 +50,30 @@ data-subject="Fotografia">Fotografia</button>
 hidden></div>
     </div>
 
+    <div class="clarification-modal" id="clarification-modal" hidden>
+        <div class="clarification-card" role="dialog" aria-modal="true" aria-labelledby="clarification-title">
+            <button type="button" class="clarification-close" id="clarification-close" aria-label="Chiudi">×</button>
+            <h2 id="clarification-title">Specifichiamo il corso</h2>
+            <p id="clarification-question"></p>
+            <div class="clarification-options" id="clarification-options"></div>
+            <div class="clarification-divider"><span>oppure usa questa specificazione</span></div>
+            <form class="clarification-custom" id="clarification-custom-form">
+                <label for="clarification-custom-input">Scrivi una specificazione personalizzata</label>
+                <div class="clarification-custom-row">
+                    <input
+                        type="text"
+                        id="clarification-custom-input"
+                        maxlength="200"
+                        placeholder="Es. terzo anno superiori, livello avanzato..."
+                        autocomplete="off"
+                        required
+                    >
+                    <button type="submit" class="btn-primary">Invia</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div class="loading-overlay" id="loading-overlay" hidden>
         <div class="loading-card">
             <div class="loading-spinner"></div>
@@ -67,6 +93,13 @@ const submitBtn = document.getElementById('submit-btn');
 const errorMessage = document.getElementById('error-message');
 const loadingOverlay = document.getElementById('loading-overlay');
 const loadingStep = document.getElementById('loading-step');
+const suggestionsList = document.getElementById('subject-suggestions');
+const clarificationModal = document.getElementById('clarification-modal');
+const clarificationQuestion = document.getElementById('clarification-question');
+const clarificationOptions = document.getElementById('clarification-options');
+const clarificationClose = document.getElementById('clarification-close');
+const clarificationCustomForm = document.getElementById('clarification-custom-form');
+const clarificationCustomInput = document.getElementById('clarification-custom-input');
 
 const loadingSteps = [
     'Analizzo l\'argomento',
@@ -75,6 +108,8 @@ const loadingSteps = [
 ];
 let stepIndex = 0;
 let stepInterval = null;
+let pendingSubject = '';
+let suggestionTimer = null;
 
 function startLoading() {
     loadingOverlay.hidden = false;
@@ -100,15 +135,8 @@ function hideError() {
     errorMessage.hidden = true;
 }
 
-form.addEventListener('submit', async (e) => {
-    e.preventDefault();
+async function submitCourse(subject, clarification = '') {
     hideError();
-    const subject = subjectInput.value.trim();
-    if (!subject || subject.length < 2) {
-        showError('Inserisci una materia o un argomento valido.');
-        return;
-    }
-
     submitBtn.disabled = true;
     submitBtn.textContent = 'Creazione...';
     startLoading();
@@ -120,7 +148,7 @@ form.addEventListener('submit', async (e) => {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': CSRF_TOKEN,
             },
-            body: JSON.stringify({ subject }),
+            body: JSON.stringify({ subject, clarification }),
         });
         const data = await resp.json();
         stopLoading();
@@ -132,6 +160,11 @@ form.addEventListener('submit', async (e) => {
 
         if (data.success && data.course_id) {
             window.location.href = `/course/${data.course_id}/`;
+        } else if (data.needs_clarification) {
+            pendingSubject = subject;
+            showClarification(data.question, data.options || []);
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Crea il mio corso';
         } else {
             const msg = data.error?.message || 'Si è verificato un errore.';
             showError(msg);
@@ -144,6 +177,54 @@ form.addEventListener('submit', async (e) => {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Crea il mio corso';
     }
+}
+
+form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const subject = subjectInput.value.trim();
+    if (!subject || subject.length < 2) {
+        showError('Inserisci una materia o un argomento valido.');
+        return;
+    }
+    submitCourse(subject);
+});
+
+function showClarification(question, options) {
+    clarificationQuestion.textContent = question;
+    clarificationOptions.replaceChildren();
+    clarificationCustomInput.value = '';
+    options.forEach(option => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'clarification-option';
+        button.textContent = option;
+        button.addEventListener('click', () => {
+            clarificationModal.hidden = true;
+            submitCourse(pendingSubject, option);
+        });
+        clarificationOptions.append(button);
+    });
+    clarificationModal.hidden = false;
+    const firstOption = clarificationOptions.querySelector('button');
+    (firstOption || clarificationCustomInput).focus();
+}
+
+clarificationCustomForm.addEventListener('submit', event => {
+    event.preventDefault();
+    const clarification = clarificationCustomInput.value.trim();
+    if (!clarification) {
+        clarificationCustomInput.focus();
+        return;
+    }
+    clarificationModal.hidden = true;
+    submitCourse(pendingSubject, clarification);
+});
+
+clarificationClose.addEventListener('click', () => {
+    clarificationModal.hidden = true;
+});
+clarificationModal.addEventListener('click', event => {
+    if (event.target === clarificationModal) clarificationModal.hidden = true;
 });
 
 // Example chips
@@ -154,6 +235,28 @@ document.querySelectorAll('.example-chip').forEach(chip => {
     });
 });
 
-subjectInput.addEventListener('input', hideError);
+subjectInput.addEventListener('input', () => {
+    hideError();
+    clearTimeout(suggestionTimer);
+    const query = subjectInput.value.trim();
+    if (query.length < 2) {
+        suggestionsList.replaceChildren();
+        return;
+    }
+    suggestionTimer = setTimeout(async () => {
+        try {
+            const response = await fetch(`/api/subjects/suggestions/?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            suggestionsList.replaceChildren();
+            (data.suggestions || []).forEach(suggestion => {
+                const option = document.createElement('option');
+                option.value = suggestion;
+                suggestionsList.append(option);
+            });
+        } catch (error) {
+            console.warn('Autocomplete non disponibile:', error);
+        }
+    }, 200);
+});
 </script>
 {% endblock %}

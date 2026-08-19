@@ -1,6 +1,6 @@
 from django.conf import settings
 
-from .access import get_subscription, is_access_bypassed
+from .access import is_access_bypassed
 
 
 def social_auth(request):
@@ -13,9 +13,8 @@ def social_auth(request):
         ),
     }
     if request.user.is_authenticated:
-        subscription = get_subscription(request.user)
         context.update({
-            "nav_subscription": subscription,
+            "nav_course_count": request.user.course_purchases.filter(status="paid").count(),
             "nav_access_bypassed": is_access_bypassed(request.user),
         })
     return context

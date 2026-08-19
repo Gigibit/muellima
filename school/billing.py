@@ -6,12 +6,13 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
-from .models import PaymentRecord, StripeEvent, Subscription
+from .models import Course, CoursePurchase, PaymentRecord, StripeEvent, Subscription
 
 
 PLAN_CONFIG = {
-    "base": {"name": "Muellima Base", "amount": 1999},
-    "premium": {"name": "Muellima Premium", "amount": 4500},
+    "base": {"name": "Muellima Base", "amount": 999},
+    "pro": {"name": "Muellima Pro", "amount": 1999},
+    "premium": {"name": "Muellima Premium", "amount": 4999},
 }
 
 
@@ -21,31 +22,37 @@ def _configure_stripe() -> None:
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
-def create_checkout_session(user, plan: str, success_url: str, cancel_url: str):
+def create_checkout_session(user, course: Course, plan: str, success_url: str, cancel_url: str):
     if plan not in PLAN_CONFIG:
         raise ValueError("Piano non valido")
     _configure_stripe()
-    local_subscription, _ = Subscription.objects.get_or_create(user=user)
+    purchase, _ = CoursePurchase.objects.get_or_create(
+        user=user, course=course, defaults={"plan": plan}
+    )
+    if purchase.is_paid:
+        raise ValueError("Corso già acquistato")
+    purchase.plan = plan
+    purchase.status = "pending"
+    purchase.save(update_fields=["plan", "status", "updated_at"])
     plan_config = PLAN_CONFIG[plan]
     customer_args = (
-        {"customer": local_subscription.stripe_customer_id}
-        if local_subscription.stripe_customer_id
+        {"customer": purchase.stripe_customer_id}
+        if purchase.stripe_customer_id
         else {"customer_email": user.email}
     )
     return stripe.checkout.Session.create(
-        mode="subscription",
+        mode="payment",
         line_items=[{
             "price_data": {
                 "currency": "eur",
                 "unit_amount": plan_config["amount"],
-                "recurring": {"interval": "month"},
-                "product_data": {"name": plan_config["name"]},
+                "product_data": {"name": f"{plan_config['name']} — {course.title}"},
             },
             "quantity": 1,
         }],
         client_reference_id=str(user.id),
-        metadata={"user_id": str(user.id), "plan": plan},
-        subscription_data={"metadata": {"user_id": str(user.id), "plan": plan}},
+        metadata={"user_id": str(user.id), "course_id": str(course.id), "plan": plan},
+        payment_intent_data={"metadata": {"user_id": str(user.id), "course_id": str(course.id), "plan": plan}},
         success_url=success_url,
         cancel_url=cancel_url,
         allow_promotion_codes=True,
@@ -158,8 +165,34 @@ def process_webhook_event(event) -> bool:
         return False
 
     obj = event["data"]["object"]
-    if event_type == "checkout.session.completed":
-        _sync_subscription(obj, checkout=True)
+    if event_type in {"checkout.session.completed", "checkout.session.async_payment_succeeded"}:
+        metadata = obj.get("metadata") or {}
+        user = get_user_model().objects.filter(id=metadata.get("user_id")).first()
+        course = Course.objects.filter(id=metadata.get("course_id")).first()
+        plan = metadata.get("plan")
+        if user and course and plan in PLAN_CONFIG and obj.get("payment_status") in {"paid", "no_payment_required"}:
+            purchase, _ = CoursePurchase.objects.update_or_create(
+                user=user,
+                course=course,
+                defaults={
+                    "plan": plan,
+                    "status": "paid",
+                    "stripe_customer_id": obj.get("customer") or "",
+                    "stripe_checkout_session_id": obj.get("id"),
+                    "stripe_payment_intent_id": obj.get("payment_intent") or "",
+                    "purchased_at": timezone.now(),
+                },
+            )
+            PaymentRecord.objects.update_or_create(
+                stripe_invoice_id=obj.get("payment_intent") or obj.get("id"),
+                defaults={
+                    "user": user,
+                    "amount_cents": PLAN_CONFIG[plan]["amount"],
+                    "currency": obj.get("currency") or "eur",
+                    "status": "paid",
+                    "occurred_at": timezone.now(),
+                },
+            )
     elif event_type in {"customer.subscription.created", "customer.subscription.updated"}:
         _sync_subscription(obj)
     elif event_type == "customer.subscription.deleted":

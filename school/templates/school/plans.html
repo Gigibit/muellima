@@ -1,38 +1,28 @@
 {% extends "school/base.html" %}
-
-{% block title %}Piani — Muellima{% endblock %}
-
+{% block title %}Acquista il corso — Muellima{% endblock %}
 {% block content %}
 <section class="plans-page">
     <header class="plans-header">
-        <h1>Scegli il tuo piano</h1>
-        <p>Il programma e i titoli delle lezioni sono visibili gratuitamente. Serve un piano attivo per iniziare una lezione.</p>
+        <h1>{% if course %}Acquista “{{ course.title }}”{% else %}Acquista un corso{% endif %}</h1>
+        <p>I primi 5 minuti di ogni corso sono gratuiti con il professore vocale. Dopo scegli una licenza una tantum: nessun abbonamento mensile.</p>
     </header>
-
-    {% if access_bypassed %}
-    <div class="account-warning bypass-notice">Il tuo account ha già accesso completo tramite whitelist o modalità mock.</div>
-    {% endif %}
-
-    <div class="plan-grid">
-        <article class="plan-card">
-            <h2>Base</h2>
-            <div class="plan-price">€19,99 <span>/ mese</span></div>
-            <ul><li>Lezioni vocali Realtime</li><li>Quiz di verifica</li><li>Profilo didattico personalizzato</li><li>Nessuna illustrazione generata</li></ul>
-            <form method="post" action="{% url 'create_checkout' 'base' %}">
-                {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
-                <button class="btn-primary" type="submit">Scegli Base</button>
-            </form>
+    {% if access_bypassed %}<div class="account-warning bypass-notice">Il tuo account ha accesso completo tramite whitelist o modalità mock.</div>
+    {% elif not course %}<div class="account-warning">Apri un corso dalla homepage per scegliere il livello di accesso.</div>
+    {% elif purchase %}<div class="account-warning bypass-notice">Hai già acquistato questo corso con il piano {{ purchase.plan|capfirst }}.</div>{% endif %}
+    {% if course and not purchase and not access_bypassed %}
+    <div class="plan-grid plan-grid-three">
+        <article class="plan-card"><h2>Base</h2><div class="plan-price">€9,99 <span>una tantum</span></div>
+            <ul><li>Professore vocale interattivo</li><li>Accesso completo al corso</li><li>Quiz di verifica</li><li>Senza esempi testuali e immagini</li></ul>
+            <form method="post" action="{% url 'create_checkout' course.id 'base' %}">{% csrf_token %}<button class="btn-primary" type="submit">Acquista Base</button></form>
         </article>
-        <article class="plan-card plan-featured">
-            <span class="plan-badge">Completo</span>
-            <h2>Premium</h2>
-            <div class="plan-price">€45 <span>/ mese</span></div>
-            <ul><li>Tutto del piano Base</li><li>Illustrazioni educative generate</li><li>Diagrammi, timeline e formule visuali</li><li>Supporti visivi per concetti complessi</li></ul>
-            <form method="post" action="{% url 'create_checkout' 'premium' %}">
-                {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
-                <button class="btn-primary" type="submit">Scegli Premium</button>
-            </form>
+        <article class="plan-card plan-featured"><span class="plan-badge">Consigliato</span><h2>Pro</h2><div class="plan-price">€19,99 <span>una tantum</span></div>
+            <ul><li>Tutto del piano Base</li><li>Esempi testuali interattivi</li><li>Codice, formule e calcoli</li><li>Passaggi e tabelle strutturate</li></ul>
+            <form method="post" action="{% url 'create_checkout' course.id 'pro' %}">{% csrf_token %}<button class="btn-primary" type="submit">Acquista Pro</button></form>
         </article>
-    </div>
+        <article class="plan-card"><h2>Premium</h2><div class="plan-price">€49,99 <span>una tantum</span></div>
+            <ul><li>Tutto del piano Pro</li><li>Immagini interattive generate</li><li>Diagrammi, grafici e timeline</li><li>Supporti visivi per concetti complessi</li></ul>
+            <form method="post" action="{% url 'create_checkout' course.id 'premium' %}">{% csrf_token %}<button class="btn-primary" type="submit">Acquista Premium</button></form>
+        </article>
+    </div>{% endif %}
 </section>
 {% endblock %}

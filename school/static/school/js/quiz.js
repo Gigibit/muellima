@@ -30,7 +30,7 @@
     // ── Open quiz modal ───────────────────────────────────────────
     quizBtn.addEventListener('click', async () => {
         // Mute mic during quiz
-        if (window.PS_Realtime) window.PS_Realtime.mute();
+        if (window.PS_Realtime) window.PS_Realtime.pauseForQuiz();
 
         quizModal.hidden = false;
         quizBody.innerHTML = `
@@ -76,14 +76,14 @@
     // ── Close quiz ────────────────────────────────────────────────
     quizClose.addEventListener('click', () => {
         quizModal.hidden = true;
-        if (window.PS_Realtime) window.PS_Realtime.unmute();
+        if (window.PS_Realtime) window.PS_Realtime.resumeAfterQuiz();
     });
 
     // Close on backdrop click
     quizModal.addEventListener('click', (e) => {
         if (e.target === quizModal) {
             quizModal.hidden = true;
-            if (window.PS_Realtime) window.PS_Realtime.unmute();
+            if (window.PS_Realtime) window.PS_Realtime.resumeAfterQuiz();
         }
     });
 
@@ -135,7 +135,7 @@
 
         options.forEach(opt => {
             opt.addEventListener('click', () => {
-                if (confirmBtn.disabled === false && !opt.classList.contains('disabled')) {
+                if (!opt.classList.contains('disabled')) {
                     options.forEach(o => o.classList.remove('selected'));
                     opt.classList.add('selected');
                     selectedIndex = parseInt(opt.dataset.index, 10);
@@ -248,7 +248,7 @@
 
         document.getElementById('quiz-restart').addEventListener('click', () => {
             quizModal.hidden = true;
-            if (window.PS_Realtime) window.PS_Realtime.unmute();
+            if (window.PS_Realtime) window.PS_Realtime.resumeAfterQuiz();
         });
     }
 

@@ -99,7 +99,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 LOGIN_URL = "/login/"
-LOGIN_REDIRECT_URL = "/plans/"
+LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/"
 ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*"]
@@ -145,6 +145,7 @@ OPENAI_TIMEOUT = 60  # seconds
 
 MIN_LESSON = int(os.environ.get("MIN_LESSON", "10"))
 MAX_LESSON = int(os.environ.get("MAX_LESSON", "24"))
+FREE_TRIAL_MINUTES = int(os.environ.get("FREE_TRIAL_MINUTES", "5"))
 
 USERS_WHITELIST = {
     email.strip().casefold()
@@ -159,3 +160,22 @@ if MIN_LESSON < 1:
     raise ValueError("MIN_LESSON deve essere almeno 1")
 if MAX_LESSON < MIN_LESSON:
     raise ValueError("MAX_LESSON deve essere maggiore o uguale a MIN_LESSON")
+if FREE_TRIAL_MINUTES < 0:
+    raise ValueError("FREE_TRIAL_MINUTES non può essere negativo")
+
+# Application logs must remain visible in the runserver console, including
+# exceptions raised while calling external AI and payment services.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+    },
+    "loggers": {
+        "school": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}

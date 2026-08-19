@@ -1,4 +1,5 @@
 """Curriculum generation via OpenAI Responses API with Structured Outputs."""
+from copy import deepcopy
 import json
 from typing import Any
 
@@ -145,6 +146,10 @@ def generate_curriculum(
     if clarification:
         user_input += f"\nSpecificazione scelta dallo studente: {clarification}"
 
+    schema = deepcopy(COURSE_SCHEMA)
+    if clarification:
+        schema["properties"]["lessons"]["minItems"] = settings.MIN_LESSON
+
     response = client.responses.create(
         model=settings.OPENAI_TEXT_MODEL,
         instructions=SYSTEM_PROMPT,
@@ -153,13 +158,40 @@ def generate_curriculum(
             "format": {
                 "type": "json_schema",
                 "name": "course_curriculum",
-                "schema": COURSE_SCHEMA,
+                "schema": schema,
                 "strict": True,
             }
         },
     )
 
     parsed = json.loads(response.output_text)
+
+    if (
+        parsed.get("valid")
+        and not parsed.get("needs_clarification")
+        and len(parsed.get("lessons", [])) < settings.MIN_LESSON
+    ):
+        constrained_schema = deepcopy(COURSE_SCHEMA)
+        constrained_schema["properties"]["lessons"]["minItems"] = settings.MIN_LESSON
+        response = client.responses.create(
+            model=settings.OPENAI_TEXT_MODEL,
+            instructions=SYSTEM_PROMPT,
+            input=(
+                f"{user_input}\nL'argomento è già sufficientemente specifico. "
+                f"Genera ora il corso completo con almeno {settings.MIN_LESSON} "
+                f"lezioni distinte e non chiedere altri chiarimenti."
+            ),
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "course_curriculum_complete",
+                    "schema": constrained_schema,
+                    "strict": True,
+                }
+            },
+        )
+        parsed = json.loads(response.output_text)
+
     parsed["_usage"] = response.usage
 
     if parsed.get("valid") and not parsed.get("needs_clarification"):

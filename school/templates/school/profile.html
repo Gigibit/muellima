@@ -21,29 +21,20 @@
     </form>
 
     <div class="subscription-section">
-        <h2>Scegli il piano</h2>
-        <p class="field-help">Puoi cambiare piano in qualsiasi momento tramite Stripe.</p>
+        <h2>I tuoi corsi</h2>
+        <p class="field-help">Ogni acquisto è una tantum ed è valido per il singolo corso.</p>
         {% if access_bypassed %}
             <div class="subscription-summary"><strong>Accesso completo</strong><span>Whitelist o modalità mock</span></div>
         {% else %}
             <div class="profile-plan-grid">
-                <form method="post" action="{% url 'create_checkout' 'base' %}" class="profile-plan-option {% if subscription.plan == 'base' and subscription.is_active %}current{% endif %}">
-                    {% csrf_token %}<strong>Base</strong><span>€19,99/mese</span>
-                    <button type="submit" {% if subscription.plan == 'base' and subscription.is_active %}disabled{% endif %}>{% if subscription.plan == 'base' and subscription.is_active %}Piano attuale{% else %}Seleziona{% endif %}</button>
-                </form>
-                <form method="post" action="{% url 'create_checkout' 'premium' %}" class="profile-plan-option {% if subscription.plan == 'premium' and subscription.is_active %}current{% endif %}">
-                    {% csrf_token %}<strong>Premium</strong><span>€45/mese · con immagini</span>
-                    <button type="submit" {% if subscription.plan == 'premium' and subscription.is_active %}disabled{% endif %}>{% if subscription.plan == 'premium' and subscription.is_active %}Piano attuale{% else %}Seleziona{% endif %}</button>
-                </form>
+                {% for purchase in purchases %}
+                <a href="{% url 'course_page' purchase.course.id %}" class="profile-plan-option current">
+                    <strong>{{ purchase.course.title }}</strong><span>{{ purchase.plan|capfirst }} · acquistato</span>
+                </a>
+                {% empty %}<p>Non hai ancora acquistato corsi.</p>{% endfor %}
             </div>
         {% endif %}
 
-        {% if subscription.stripe_customer_id and not access_bypassed %}
-        <form method="post" action="{% url 'billing_portal' %}" class="billing-portal-form">
-            {% csrf_token %}
-            <button type="submit" class="nav-link nav-button">Gestisci pagamento e abbonamento</button>
-        </form>
-        {% endif %}
     </div>
 
     <button type="submit" class="btn-primary profile-save-btn" form="profile-form">Salva profilo</button>

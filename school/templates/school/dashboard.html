@@ -8,7 +8,7 @@
     <h1>Dashboard amministrativa</h1>
     <div class="metric-grid">
         <div class="metric-card"><span>Utenti</span><strong>{{ user_count }}</strong></div>
-        <div class="metric-card"><span>Abbonamenti attivi</span><strong>{{ active_subscriptions }}</strong></div>
+        <div class="metric-card"><span>Corsi acquistati</span><strong>{{ active_subscriptions }}</strong></div>
         <div class="metric-card"><span>Ricavi registrati</span><strong>€{{ revenue_cents|euros }}</strong></div>
         <div class="metric-card"><span>Richieste AI</span><strong>{{ totals.requests|default:0 }}</strong></div>
         <div class="metric-card"><span>Token totali</span><strong>{{ totals.total_tokens|default:0 }}</strong></div>
@@ -17,11 +17,11 @@
 
     <h2>Utilizzo per utente</h2>
     <div class="table-wrap"><table class="admin-table">
-        <thead><tr><th>Utente</th><th>Piano</th><th>Stato</th><th>Richieste</th><th>Token</th><th>Immagini</th><th>Pagamenti</th></tr></thead>
+        <thead><tr><th>Utente</th><th>Corsi</th><th>Licenze</th><th>Richieste</th><th>Token</th><th>Immagini</th><th>Pagamenti</th></tr></thead>
         <tbody>{% for user in users %}<tr>
             <td>{{ user.email|default:user.username }}</td>
-            <td>{{ user.subscription.get_plan_display|default:"—" }}</td>
-            <td>{{ user.subscription.get_status_display|default:"—" }}</td>
+            <td>{{ user.purchased_course_count }}</td>
+            <td>{{ user.purchase_plans }}</td>
             <td>{{ user.usage_requests }}</td><td>{{ user.usage_tokens }}</td><td>{{ user.usage_images }}</td>
             <td>€{{ user.payments_cents|euros }}</td>
         </tr>{% empty %}<tr><td colspan="7">Nessun utente.</td></tr>{% endfor %}</tbody>

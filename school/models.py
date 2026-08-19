@@ -88,6 +88,54 @@ class Subscription(models.Model):
         return f"{self.user} — {self.plan or 'nessun piano'} ({self.status})"
 
 
+class CoursePurchase(models.Model):
+    PLAN_CHOICES = [
+        ("base", "Base — €9,99"),
+        ("pro", "Pro — €19,99"),
+        ("premium", "Premium — €49,99"),
+    ]
+    STATUS_CHOICES = [
+        ("pending", "In attesa"),
+        ("paid", "Pagato"),
+        ("refunded", "Rimborsato"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="course_purchases",
+        on_delete=models.CASCADE,
+    )
+    course = models.ForeignKey(
+        "Course",
+        related_name="purchases",
+        on_delete=models.CASCADE,
+    )
+    plan = models.CharField(max_length=10, choices=PLAN_CHOICES)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending")
+    stripe_customer_id = models.CharField(max_length=255, blank=True, db_index=True)
+    stripe_checkout_session_id = models.CharField(max_length=255, blank=True, unique=True, null=True)
+    stripe_payment_intent_id = models.CharField(max_length=255, blank=True, db_index=True)
+    purchased_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "course"], name="unique_course_purchase")
+        ]
+
+    @property
+    def is_paid(self) -> bool:
+        return self.status == "paid"
+
+    @property
+    def allows_written_examples(self) -> bool:
+        return self.is_paid and self.plan in {"pro", "premium"}
+
+    @property
+    def allows_illustrations(self) -> bool:
+        return self.is_paid and self.plan == "premium"
+
+
 class PaymentRecord(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -205,6 +253,8 @@ class LessonSession(models.Model):
     )
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)
+    duration_seconds = models.PositiveIntegerField(default=0)
+    is_trial = models.BooleanField(default=False)
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default="active"
     )

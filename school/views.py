@@ -13,6 +13,7 @@ from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.db.models import Q, Sum
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render, get_object_or_404, redirect
@@ -25,6 +26,9 @@ from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from .access import (
     api_login_required,
     can_generate_illustrations,
+    can_show_written_examples,
+    free_trial_seconds_remaining,
+    get_course_purchase,
     get_subscription,
     has_lesson_access,
     is_access_bypassed,
@@ -37,11 +41,11 @@ from .billing import (
     create_portal_session,
     process_webhook_event,
 )
-from .models import Course, Lesson, LessonSession, PaymentRecord, Subscription, UsageRecord, UserProfile
+from .models import Course, CoursePurchase, Lesson, LessonSession, PaymentRecord, Subscription, UsageRecord, UserProfile
 from .forms import UserProfileForm
 from .signals import default_display_name
 from .services.curriculum_service import generate_curriculum
-from .services.quiz_service import generate_quiz
+from .services.quiz_service import generate_quiz as generate_quiz_service
 from .services.realtime_service import create_realtime_session as create_realtime_session_service
 from .services.illustration_service import create_illustration
 from .usage import record_usage
@@ -118,16 +122,19 @@ def profile_page(request):
 
     return render(request, "school/profile.html", {
         "form": form,
-        "subscription": get_subscription(request.user),
+        "purchases": request.user.course_purchases.filter(status="paid").select_related("course"),
         "access_bypassed": is_access_bypassed(request.user),
     })
 
 
 @login_required
 def plans_page(request):
+    course_id = request.GET.get("course_id", "")
+    course = get_object_or_404(Course, id=int(course_id)) if course_id.isdigit() else None
     return render(request, "school/plans.html", {
         "plans": PLAN_CONFIG,
-        "subscription": get_subscription(request.user),
+        "course": course,
+        "purchase": get_course_purchase(request.user, course),
         "access_bypassed": is_access_bypassed(request.user),
         "next_url": request.GET.get("next", ""),
     })
@@ -148,6 +155,9 @@ def staff_dashboard(request):
         user.payments_cents = user.payments.filter(status="paid").aggregate(
             total=Sum("amount_cents")
         )["total"] or 0
+        purchases = list(user.course_purchases.filter(status="paid"))
+        user.purchased_course_count = len(purchases)
+        user.purchase_plans = ", ".join(sorted({purchase.plan.title() for purchase in purchases})) or "—"
     totals = UsageRecord.objects.aggregate(
         requests=Sum("request_count"),
         input_tokens=Sum("input_tokens"),
@@ -159,7 +169,7 @@ def staff_dashboard(request):
         "users": users,
         "totals": totals,
         "user_count": get_user_model().objects.count(),
-        "active_subscriptions": Subscription.objects.filter(status__in=Subscription.ACCESS_STATUSES).count(),
+        "active_subscriptions": CoursePurchase.objects.filter(status="paid").count(),
         "payments": PaymentRecord.objects.select_related("user")[:50],
         "revenue_cents": PaymentRecord.objects.filter(status="paid").aggregate(total=Sum("amount_cents"))["total"] or 0,
     })
@@ -172,12 +182,12 @@ def course_page(request, course_id: int):
     if not request.user.is_authenticated:
         action_url = f"{reverse('login')}?next={reverse('lesson_page', args=[course.id])}"
         action_label = "Accedi per iniziare"
-    elif has_lesson_access(request.user):
+    elif has_lesson_access(request.user, course):
         action_url = reverse("lesson_page", args=[course.id])
         action_label = "Inizia a studiare →"
     else:
-        action_url = f"{reverse('plans')}?next={reverse('lesson_page', args=[course.id])}"
-        action_label = "Scegli un piano per iniziare"
+        action_url = f"{reverse('plans')}?course_id={course.id}"
+        action_label = "Acquista il corso per continuare"
     return render(request, "school/course.html", {
         "course": course,
         "lessons": lessons,
@@ -233,7 +243,7 @@ def generate_course(request):
         if cached_course and not cached_course.cache_key:
             cached_course.cache_key = cache_key
             cached_course.save(update_fields=["cache_key"])
-    if cached_course:
+    if cached_course and settings.MIN_LESSON <= cached_course.lessons.count() <= settings.MAX_LESSON:
         record_usage(
             request.user,
             "course_cache",
@@ -279,29 +289,36 @@ def generate_course(request):
     if not lessons_data:
         return error_response("NO_LESSONS", "Il corso non contiene lezioni.")
 
-    # Persist course
-    course = Course.objects.create(
-        title=curriculum["title"],
-        normalized_subject=curriculum["normalized_subject"],
-        cache_key=cache_key,
-        description=curriculum["description"],
-        difficulty=curriculum.get("difficulty", "beginner"),
-    )
-
-    # Persist lessons
-    for lesson_data in lessons_data:
-        Lesson.objects.create(
-            course=course,
-            order=lesson_data["order"],
-            title=lesson_data["title"],
-            summary=lesson_data["summary"],
-            content_outline={
-                "objectives": lesson_data.get("objectives", []),
-                "key_concepts": lesson_data.get("key_concepts", []),
-                "examples": lesson_data.get("examples", []),
-                "prerequisites": lesson_data.get("prerequisites", []),
+    # Persist the entire curriculum atomically. Reuse and repair an incomplete
+    # cached course left by an older failed generation, if one exists.
+    with transaction.atomic():
+        course, _ = Course.objects.update_or_create(
+            cache_key=cache_key,
+            defaults={
+                "title": curriculum["title"],
+                "normalized_subject": curriculum["normalized_subject"],
+                "description": curriculum["description"],
+                "difficulty": curriculum.get("difficulty", "beginner"),
             },
         )
+        course.lessons.all().delete()
+        Lesson.objects.bulk_create([
+            Lesson(
+                course=course,
+                # The sequence is authoritative: model-provided order values
+                # may be duplicated, missing, or otherwise inconsistent.
+                order=order,
+                title=lesson_data["title"],
+                summary=lesson_data["summary"],
+                content_outline={
+                    "objectives": lesson_data.get("objectives", []),
+                    "key_concepts": lesson_data.get("key_concepts", []),
+                    "examples": lesson_data.get("examples", []),
+                    "prerequisites": lesson_data.get("prerequisites", []),
+                },
+            )
+            for order, lesson_data in enumerate(lessons_data, start=1)
+        ])
 
     return JsonResponse({"success": True, "course_id": course.id})
 
@@ -336,7 +353,8 @@ def create_realtime_session(request):
             learner_name=profile.display_name,
             reasoning_effort=profile.realtime_reasoning_effort,
             learning_context=profile.learning_context,
-            allow_illustrations=can_generate_illustrations(request.user),
+            allow_illustrations=can_generate_illustrations(request.user, lesson.course),
+            allow_written_examples=can_show_written_examples(request.user, lesson.course),
         )
     except Exception:
         logger.exception("Realtime session creation failed")
@@ -346,15 +364,53 @@ def create_realtime_session(request):
             status=503,
         )
 
+    has_paid_access = is_access_bypassed(request.user) or bool(get_course_purchase(request.user, lesson.course))
+    trial_seconds = None if has_paid_access else free_trial_seconds_remaining(request.user, lesson.course)
+
     # Create a LessonSession record
-    LessonSession.objects.create(lesson=lesson, student=request.user, status="active")
+    lesson_session = LessonSession.objects.create(
+        lesson=lesson,
+        student=request.user,
+        status="active",
+        is_trial=not has_paid_access,
+    )
     record_usage(
         request.user,
         "realtime_session",
         metadata={"lesson_id": lesson.id},
     )
 
-    return JsonResponse({"success": True, **session})
+    return JsonResponse({
+        "success": True,
+        **session,
+        "lesson_session_id": lesson_session.id,
+        "trial_seconds_remaining": trial_seconds,
+    })
+
+
+@csrf_protect
+@require_POST
+@api_login_required
+def end_realtime_session(request):
+    """Close an owned session and persist its elapsed duration."""
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return error_response("INVALID_REQUEST", "Richiesta non valida.")
+
+    lesson_session = get_object_or_404(
+        LessonSession,
+        id=data.get("lesson_session_id"),
+        student=request.user,
+        status="active",
+    )
+    ended_at = timezone.now()
+    elapsed = max(0, int((ended_at - lesson_session.started_at).total_seconds()))
+    lesson_session.ended_at = ended_at
+    lesson_session.duration_seconds = elapsed
+    lesson_session.status = "abandoned"
+    lesson_session.save(update_fields=["ended_at", "duration_seconds", "status"])
+    return JsonResponse({"success": True, "duration_seconds": elapsed})
 
 
 @csrf_protect
@@ -368,7 +424,7 @@ def generate_quiz(request, lesson_id: int):
     lesson = get_object_or_404(Lesson, id=lesson_id)
 
     try:
-        quiz_data = generate_quiz(lesson)
+        quiz_data = generate_quiz_service(lesson)
     except Exception:
         logger.exception("Quiz generation failed")
         return error_response(
@@ -391,9 +447,12 @@ def complete_lesson(request, lesson_id: int):
     lesson_session = lesson.sessions.filter(student=request.user, status="active").first()
 
     if lesson_session:
+        ended_at = timezone.now()
+        elapsed = max(0, int((ended_at - lesson_session.started_at).total_seconds()))
         lesson_session.status = "completed"
-        lesson_session.ended_at = timezone.now()
-        lesson_session.save(update_fields=["status", "ended_at"])
+        lesson_session.ended_at = ended_at
+        lesson_session.duration_seconds = elapsed
+        lesson_session.save(update_fields=["status", "ended_at", "duration_seconds"])
 
     return JsonResponse({"success": True, "lesson_id": lesson.id})
 
@@ -421,7 +480,9 @@ def generate_illustration(request):
     if not concept:
         return error_response("MISSING_CONCEPT", "Concept non specificato.")
 
-    if not can_generate_illustrations(request.user):
+    lesson_id = data.get("lesson_id")
+    lesson = get_object_or_404(Lesson, id=lesson_id) if lesson_id else None
+    if not lesson or not can_generate_illustrations(request.user, lesson.course):
         return error_response(
             "PREMIUM_REQUIRED",
             "Le illustrazioni sono disponibili con il piano Premium.",
@@ -451,16 +512,18 @@ def generate_illustration(request):
 
 @login_required
 @require_POST
-def create_checkout(request, plan: str):
+def create_checkout(request, course_id: int, plan: str):
     if plan not in PLAN_CONFIG:
         messages.error(request, "Piano non valido.")
         return redirect("plans")
+    course = get_object_or_404(Course, id=course_id)
     if settings.MOCK:
-        subscription = get_subscription(request.user)
-        subscription.plan = plan
-        subscription.status = "active"
-        subscription.save(update_fields=["plan", "status", "updated_at"])
-        messages.success(request, "Abbonamento mock attivato.")
+        CoursePurchase.objects.update_or_create(
+            user=request.user,
+            course=course,
+            defaults={"plan": plan, "status": "paid", "purchased_at": timezone.now()},
+        )
+        messages.success(request, "Acquisto mock completato.")
         next_url = request.POST.get("next", "")
         if next_url and url_has_allowed_host_and_scheme(
             next_url,
@@ -468,18 +531,19 @@ def create_checkout(request, plan: str):
             require_https=request.is_secure(),
         ):
             return redirect(next_url)
-        return redirect("profile")
+        return redirect("lesson_page", course_id=course.id)
     try:
         checkout = create_checkout_session(
             request.user,
+            course,
             plan,
-            request.build_absolute_uri(reverse("checkout_success")),
-            request.build_absolute_uri(reverse("plans")),
+            request.build_absolute_uri(f"{reverse('checkout_success')}?course_id={course.id}"),
+            request.build_absolute_uri(f"{reverse('plans')}?course_id={course.id}"),
         )
     except Exception:
         logger.exception("Stripe checkout creation failed")
         messages.error(request, "Non è stato possibile avviare il pagamento.")
-        return redirect("plans")
+        return redirect(f"{reverse('plans')}?course_id={course.id}")
     return redirect(checkout.url)
 
 
@@ -487,9 +551,10 @@ def create_checkout(request, plan: str):
 def checkout_success(request):
     messages.success(
         request,
-        "Pagamento ricevuto. L’accesso si attiverà non appena Stripe conferma il webhook.",
+        "Pagamento ricevuto. Il corso si attiverà non appena Stripe conferma il webhook.",
     )
-    return redirect("profile")
+    course_id = request.GET.get("course_id")
+    return redirect("course_page", course_id=course_id) if course_id else redirect("profile")
 
 
 @login_required

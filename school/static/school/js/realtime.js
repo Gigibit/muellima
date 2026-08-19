@@ -32,6 +32,12 @@
     const illustrationLoader = document.getElementById('illustration-loader');
     const illustrationTitle = document.getElementById('illustration-title');
     const illustrationClose = document.getElementById('illustration-close');
+    const writtenExampleArea = document.getElementById('written-example-area');
+    const writtenExampleTitle = document.getElementById('written-example-title');
+    const writtenExampleMeta = document.getElementById('written-example-meta');
+    const writtenExampleContent = document.getElementById('written-example-content');
+    const writtenExampleExplanation = document.getElementById('written-example-explanation');
+    const writtenExampleClose = document.getElementById('written-example-close');
     const lessonComplete = document.getElementById('lesson-complete');
     const lessonCompleteSummary = document.getElementById('lesson-complete-summary');
 
@@ -42,6 +48,14 @@
     let micEnabled = true;
     let currentLessonId = null;
     let isConnected = false;
+    let initialResponseRequested = false;
+    let openingInstruction = '';
+    let lessonSessionId = null;
+    let trialTimer = null;
+    let sessionEndReported = false;
+    let responseActive = false;
+    let quizPaused = false;
+    const handledToolCallIds = new Set();
 
     // ── Status management ──────────────────────────────────────────
     const STATUS_MAP = {
@@ -148,6 +162,12 @@
         const tokenData = await tokenResp.json();
         const ephemeralKey = tokenData.ephemeral_key;
         const model = tokenData.model;
+        lessonSessionId = tokenData.lesson_session_id;
+        sessionEndReported = false;
+        openingInstruction = tokenData.opening_instruction || (
+            `Inizia esclusivamente la lezione "${tokenData.lesson_title || ''}" ` +
+            'e introduci subito il primo argomento del suo programma.'
+        );
 
         if (!ephemeralKey) {
             throw new Error('Chiave di sessione non ricevuta.');
@@ -181,6 +201,7 @@
         dc = pc.createDataChannel('oai-events');
         dc.onopen = () => {
             console.log('DataChannel opened');
+            requestInitialProfessorResponse();
         };
         dc.onclose = () => {
             console.log('DataChannel closed');
@@ -200,6 +221,7 @@
                 quizBtn.disabled = false;
                 endBtn.hidden = false;
                 startBtn.textContent = 'Lezione in corso';
+                startTrialCountdown(tokenData.trial_seconds_remaining);
                 // Set initial listening state
                 setTimeout(() => setStatus('listening'), 1000);
             } else if (pc.connectionState === 'failed' || pc.connectionState 
@@ -242,6 +264,54 @@
         });
     }
 
+    function startTrialCountdown(secondsRemaining) {
+        if (secondsRemaining === null || secondsRemaining === undefined) return;
+        clearTimeout(trialTimer);
+        const seconds = Math.max(0, Number(secondsRemaining) || 0);
+        trialTimer = setTimeout(async () => {
+            await reportSessionEnd();
+            cleanup();
+            setStatus('disconnected');
+            showToast('Hai terminato i 5 minuti gratuiti. Scegli un piano per continuare.', 6000);
+            setTimeout(() => {
+                window.location.href = `/plans/?course_id=${encodeURIComponent(window.PS_COURSE_ID)}`;
+            }, 1800);
+        }, seconds * 1000);
+    }
+
+    async function reportSessionEnd({ keepalive = false } = {}) {
+        if (!lessonSessionId || sessionEndReported) return;
+        sessionEndReported = true;
+        try {
+            await fetch('/api/realtime/end/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': window.PS_CSRF_TOKEN,
+                },
+                body: JSON.stringify({ lesson_session_id: lessonSessionId }),
+                keepalive,
+            });
+        } catch (err) {
+            console.warn('Session duration reporting failed:', err);
+        }
+    }
+
+    // Start the lesson proactively: the professor takes the first turn as soon
+    // as the Realtime data channel can accept client events.
+    function requestInitialProfessorResponse() {
+        if (!dc || dc.readyState !== 'open' || initialResponseRequested) return;
+
+        initialResponseRequested = true;
+        setStatus('professor_thinking');
+        dc.send(JSON.stringify({
+            type: 'response.create',
+            response: {
+                instructions: openingInstruction,
+            },
+        }));
+    }
+
     // ── Wait for ICE gathering ────────────────────────────────────
     function waitForIceGathering(peerConnection, timeout = 5000) {
         return new Promise((resolve) => {
@@ -281,6 +351,7 @@
 
             // Professor response started
             case 'response.created':
+                responseActive = true;
                 setStatus('professor_thinking');
                 break;
 
@@ -301,6 +372,7 @@
 
             // Response fully done
             case 'response.done':
+                responseActive = false;
                 setStatus('listening');
                 reportRealtimeUsage(data.response?.usage);
                 break;
@@ -308,6 +380,14 @@
             // Function call from the model (arguments complete)
             case 'response.function_call_arguments.done':
                 handleFunctionCall(data);
+                break;
+
+            // Some Realtime responses expose the completed function call as an
+            // output item rather than through the arguments-done event.
+            case 'response.output_item.done':
+                if (data.item?.type === 'function_call') {
+                    handleFunctionCall(data.item);
+                }
                 break;
 
             // Error from Realtime API
@@ -357,6 +437,8 @@
             console.warn('Function call missing call_id or name:', data);
             return;
         }
+        if (handledToolCallIds.has(callId)) return;
+        handledToolCallIds.add(callId);
 
         if (name === 'show_illustration') {
             // Show illustration UI
@@ -379,6 +461,12 @@
                     error: 'Non è stato possibile generare l\'illustrazione.',
                 });
             }
+        } else if (name === 'show_written_example') {
+            displayWrittenExample(args);
+            sendFunctionCallOutput(callId, {
+                shown: true,
+                message: 'L\'esempio scritto è stato mostrato allo studente.',
+            });
         } else if (name === 'finish_lesson') {
             await finishLesson(callId, args);
         } else {
@@ -435,7 +523,7 @@
         }));
 
         // Trigger the model to continue unless this tool ended the lesson.
-        if (continueResponse) {
+        if (continueResponse && !quizPaused) {
             dc.send(JSON.stringify({ type: 'response.create' }));
         }
     }
@@ -460,6 +548,7 @@
                 concept: args.concept || '',
                 visual_type: args.visual_type || 'illustration',
                 description: args.description || '',
+                lesson_id: Number(currentLessonId),
             }),
         });
 
@@ -484,6 +573,22 @@
         illustrationArea.hidden = true;
     });
 
+    // ── Written examples (code, formulas and calculations) ───────
+    function displayWrittenExample(args) {
+        writtenExampleTitle.textContent = args.title || 'Supporto testuale';
+        writtenExampleMeta.textContent = [args.format, args.language]
+            .filter(Boolean)
+            .join(' · ');
+        writtenExampleContent.textContent = args.content || '';
+        writtenExampleExplanation.textContent = args.explanation || '';
+        writtenExampleExplanation.hidden = !args.explanation;
+        writtenExampleArea.hidden = false;
+    }
+
+    writtenExampleClose.addEventListener('click', () => {
+        writtenExampleArea.hidden = true;
+    });
+
     // ── Microphone toggle ────────────────────────────────────────
     micBtn.addEventListener('click', () => {
         if (!localStream) return;
@@ -500,7 +605,8 @@
     micBtn.classList.add('active');
 
     // ── End session ──────────────────────────────────────────────
-    endBtn.addEventListener('click', () => {
+    endBtn.addEventListener('click', async () => {
+        await reportSessionEnd();
         cleanup();
         setStatus('disconnected');
         startBtn.disabled = false;
@@ -511,6 +617,13 @@
     // ── Cleanup ───────────────────────────────────────────────────
     function cleanup() {
         isConnected = false;
+        initialResponseRequested = false;
+        handledToolCallIds.clear();
+        openingInstruction = '';
+        responseActive = false;
+        quizPaused = false;
+        clearTimeout(trialTimer);
+        trialTimer = null;
 
         // Close DataChannel
         if (dc) {
@@ -544,11 +657,32 @@
 
     // ── Cleanup on page unload ───────────────────────────────────
     window.addEventListener('beforeunload', () => {
+        reportSessionEnd({ keepalive: true });
         cleanup();
     });
 
     // Expose cleanup for quiz.js to mute mic during quiz
     window.PS_Realtime = {
+        pauseForQuiz: () => {
+            quizPaused = true;
+            if (localStream) {
+                localStream.getTracks().forEach(t => { t.enabled = false; });
+            }
+            if (dc && dc.readyState === 'open') {
+                if (responseActive) dc.send(JSON.stringify({ type: 'response.cancel' }));
+                dc.send(JSON.stringify({ type: 'output_audio_buffer.clear' }));
+            }
+            remoteAudio.pause();
+            setStatus('connected');
+        },
+        resumeAfterQuiz: () => {
+            quizPaused = false;
+            remoteAudio.play().catch(() => {});
+            if (localStream && micEnabled) {
+                localStream.getTracks().forEach(t => { t.enabled = true; });
+            }
+            if (isConnected) setStatus('listening');
+        },
         mute: () => {
             if (localStream) {
                 localStream.getTracks().forEach(t => { t.enabled = false; });
