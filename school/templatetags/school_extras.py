@@ -17,3 +17,11 @@ def euros(cents):
 def firstword(value):
     words = str(value or "").strip().split()
     return words[0] if words else ""
+
+
+@register.filter
+def usd(value):
+    try:
+        return f"{Decimal(value or 0):.4f}"
+    except (TypeError, ValueError):
+        return "0.0000"

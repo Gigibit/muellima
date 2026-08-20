@@ -1,0 +1,27 @@
+{% extends "school/base.html" %}
+
+{% block title %}Registrati — Muellima{% endblock %}
+
+{% block content %}
+<section class="account-card">
+    <h1>Crea il tuo account</h1>
+    <p class="account-intro">Registrati per salvare i corsi e ritrovare i tuoi progressi.</p>
+
+    <form method="post" class="auth-form">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next_url }}">
+        {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+        {% for field in form %}
+        <div class="form-group">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<small class="form-help">{{ field.help_text }}</small>{% endif %}
+            {% if field.errors %}<div class="field-errors">{{ field.errors }}</div>{% endif %}
+        </div>
+        {% endfor %}
+        <button type="submit" class="btn-primary auth-submit">Registrati</button>
+    </form>
+
+    <p class="auth-switch">Hai già un account? <a href="{% url 'login' %}{% if next_url %}?next={{ next_url|urlencode }}{% endif %}">Accedi</a></p>
+</section>
+{% endblock %}

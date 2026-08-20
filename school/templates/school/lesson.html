@@ -13,23 +13,28 @@ corso</a>
     <div class="lesson-selector">
         <label for="lesson-combobox" class="selector-label">Seleziona 
 lezione</label>
-        <select id="lesson-combobox" class="lesson-combobox" 
-aria-label="Seleziona una lezione">
-            {% for lesson in lessons %}
-            <option value="{{ lesson.id }}">Lezione {{ lesson.order }} — {{ lesson.title }}</option>
-            {% endfor %}
-        </select>
-        <button id="start-lesson-btn" class="btn-primary" disabled>Inizia 
-lezione</button>
+        <div class="lesson-selector-row">
+            <select id="lesson-combobox" class="lesson-combobox"
+                    aria-label="Seleziona una lezione">
+                {% for lesson in lessons %}
+                <option value="{{ lesson.id }}"{% if lesson.id == initial_lesson_id %} selected{% endif %}>Lezione {{ lesson.order }} — {{ lesson.title }}</option>
+                {% endfor %}
+            </select>
+            <button id="start-lesson-btn" class="lesson-play-btn" type="button"
+                    aria-label="Inizia lezione" title="Inizia lezione" disabled>▶</button>
+        </div>
     </div>
 
     <!-- Professor area -->
     <div class="professor-area" id="professor-area">
         <div class="professor-avatar-wrap" id="professor-avatar-wrap">
-            <img src="{% static 'school/images/professor.svg' %}" 
-alt="Professore AI" class="professor-avatar" id="professor-avatar">
+            <div class="professor-blob" id="professor-blob" role="button" tabindex="0"
+                 aria-label="Fai blurpare il professore AI">
+                <span class="professor-blob-shine"></span>
+                <span class="professor-blob-core"></span>
+            </div>
         </div>
-        <h2 class="professor-name">Professore AI</h2>
+        <h2 class="professor-name">Se hai dubbi, chiedi pure</h2>
         <div class="professor-status" id="professor-status">
             <span class="status-dot status-disconnected"></span>
             <span class="status-text" id="status-text">Disconnesso</span>
@@ -77,26 +82,57 @@ alt="Illustrazione didattica" hidden>
         </div>
     </div>
 
-    <!-- Controls -->
-    <div class="lesson-controls">
-        <button id="mic-btn" class="control-btn" disabled 
-aria-label="Microfono">
-            <span class="control-icon">🎙</span>
-            <span class="control-label">Microfono</span>
-        </button>
-        <button id="quiz-btn" class="control-btn" disabled aria-label="Quiz">
-            <span class="control-icon">📝</span>
-            <span class="control-label">Quiz</span>
-        </button>
-        <button id="end-btn" class="control-btn control-btn-danger" hidden 
-aria-label="Termina">
-            <span class="control-icon">⏹</span>
-            <span class="control-label">Termina</span>
-        </button>
-    </div>
+    <button id="quiz-btn" class="lesson-quiz-action" type="button" disabled>
+        Fai il quiz
+    </button>
 
-    <!-- Error toast -->
-    <div class="toast" id="toast" role="alert" hidden></div>
+    <button id="mic-btn" class="mic-fab" type="button" disabled
+            aria-label="Disattiva microfono" title="Disattiva microfono">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Z"/>
+            <path d="M19 11a7 7 0 0 1-14 0M12 18v3M9 21h6"/>
+            <path class="mic-slash" d="M4 4l16 16"/>
+        </svg>
+    </button>
+
+</div>
+
+<div class="lesson-tutorial" id="lesson-tutorial" hidden>
+    <div class="lesson-tutorial-card" role="dialog" aria-modal="true"
+         aria-labelledby="lesson-tutorial-title">
+        <span class="lesson-tutorial-kicker">Come funziona</span>
+        <h2 id="lesson-tutorial-title">La tua lezione è una conversazione</h2>
+        <p class="lesson-tutorial-intro">Tre cose da sapere prima di iniziare.</p>
+
+        <div class="lesson-tutorial-steps">
+            <article class="lesson-tutorial-step">
+                <div class="tutorial-visual tutorial-play" aria-hidden="true"><span>▶</span></div>
+                <h3>Avvia la lezione</h3>
+                <p>Premi Play accanto al titolo. Diventerà Stop mentre il professore è attivo.</p>
+            </article>
+            <article class="lesson-tutorial-step">
+                <div class="tutorial-visual tutorial-talk" aria-hidden="true">
+                    <span class="tutorial-avatar"></span><span class="tutorial-wave">)))</span>
+                </div>
+                <h3>Parla liberamente</h3>
+                <p>Fai domande a voce. Il piccolo microfono in basso a destra attiva o disattiva l’ascolto.</p>
+            </article>
+            <article class="lesson-tutorial-step">
+                <div class="tutorial-visual tutorial-supports" aria-hidden="true">
+                    <span>≡</span><span>▧</span>
+                </div>
+                <h3>Segui i supporti</h3>
+                <p>Esempi testuali e illustrazioni, quando inclusi nel piano, compariranno sotto il professore.</p>
+            </article>
+        </div>
+
+        <p class="lesson-tutorial-quiz-note">
+            <strong>Come si completa?</strong> Concludi tutti gli argomenti con il professore oppure supera il quiz con una risposta corretta in più della metà.
+        </p>
+
+        <button class="btn-primary lesson-tutorial-dismiss" id="lesson-tutorial-dismiss"
+                type="button">Ho capito, iniziamo</button>
+    </div>
 </div>
 
 <!-- Quiz Modal -->
@@ -111,6 +147,13 @@ quiz">×</button>
             <span class="quiz-score-correct" id="quiz-correct">✓ 0</span>
             <span class="quiz-score-wrong" id="quiz-wrong">✕ 0</span>
             <span class="quiz-score-total" id="quiz-total">0 / 0</span>
+        </div>
+        <div class="quiz-feedback-toast" id="quiz-feedback-toast" role="status" hidden>
+            <div>
+                <strong id="quiz-feedback-toast-title"></strong>
+                <span id="quiz-feedback-toast-message"></span>
+            </div>
+            <button type="button" id="quiz-feedback-toast-close" aria-label="Chiudi feedback">×</button>
         </div>
         <div class="quiz-body" id="quiz-body">
             <div class="quiz-loading">
@@ -136,6 +179,29 @@ window.PS_LESSONS = [
         { id: {{ lesson.id }}, order: {{ lesson.order }}, title: "{{ lesson.title|escapejs }}" },
     {% endfor %}
 ];
+
+(function initializeLessonTutorial() {
+    const tutorial = document.getElementById('lesson-tutorial');
+    const dismiss = document.getElementById('lesson-tutorial-dismiss');
+    const playButton = document.getElementById('start-lesson-btn');
+    const storageKey = `muellima.lesson-tutorial.seen.v3.course.${window.PS_COURSE_ID}`;
+    let tutorialSeen = false;
+
+    try {
+        tutorialSeen = localStorage.getItem(storageKey) === '1';
+    } catch (error) {
+        tutorialSeen = false;
+    }
+
+    tutorial.hidden = tutorialSeen;
+    if (!tutorialSeen) requestAnimationFrame(() => dismiss.focus());
+
+    dismiss.addEventListener('click', () => {
+        tutorial.hidden = true;
+        try { localStorage.setItem(storageKey, '1'); } catch (error) {}
+        playButton.focus();
+    });
+})();
 </script>
 <script src="{% static 'school/js/realtime.js' %}"></script>
 <script src="{% static 'school/js/quiz.js' %}"></script>

@@ -16,5 +16,7 @@ def social_auth(request):
         context.update({
             "nav_course_count": request.user.course_purchases.filter(status="paid").count(),
             "nav_access_bypassed": is_access_bypassed(request.user),
+            "nav_demo_mode": settings.MOCK_TIME > 0,
+            "nav_demo_minutes": settings.MOCK_TIME,
         })
     return context

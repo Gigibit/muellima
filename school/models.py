@@ -5,6 +5,8 @@ to a user (Course, LessonSession, Quiz) has a nullable ``student``
 ForeignKey placeholder commented out, ready to be activated when
 authentication is added.
 """
+import uuid
+
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -136,6 +138,54 @@ class CoursePurchase(models.Model):
         return self.is_paid and self.plan == "premium"
 
 
+class PurchaseWhitelist(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        related_name="purchase_whitelist_entry",
+        on_delete=models.CASCADE,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="purchase_whitelist_entries_created",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return getattr(self.user, "email", "") or str(self.user)
+
+
+class CourseInterest(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="course_interests",
+        on_delete=models.CASCADE,
+    )
+    course = models.ForeignKey(
+        "Course",
+        related_name="interests",
+        on_delete=models.CASCADE,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "course"],
+                name="unique_user_course_interest",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user} — {self.course}"
+
+
 class PaymentRecord(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -189,6 +239,34 @@ class UsageRecord(models.Model):
         ordering = ["-created_at"]
 
 
+class PageVisit(models.Model):
+    visitor_id = models.UUIDField(default=uuid.uuid4, db_index=True, editable=False)
+    ip_address = models.GenericIPAddressField(db_index=True)
+    category = models.CharField(max_length=100)
+    visit_count = models.PositiveBigIntegerField(default=1)
+    last_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="page_visits",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    first_visited_at = models.DateTimeField(auto_now_add=True)
+    last_visited_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-last_visited_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["visitor_id", "category"],
+                name="unique_page_visit_per_visitor_category",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.ip_address} — {self.category} ({self.visit_count})"
+
+
 class Course(models.Model):
     DIFFICULTY_CHOICES = [
         ("beginner", "Principiante"),
@@ -215,6 +293,41 @@ class Course(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+
+class UserCourse(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="course_history",
+        on_delete=models.CASCADE,
+    )
+    course = models.ForeignKey(
+        Course,
+        related_name="user_history",
+        on_delete=models.CASCADE,
+    )
+    last_lesson = models.ForeignKey(
+        "Lesson",
+        related_name="+",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_accessed_at = models.DateTimeField(default=timezone.now, db_index=True)
+    hidden_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-last_accessed_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "course"],
+                name="unique_user_course_history",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user} — {self.course}"
 
 
 class Lesson(models.Model):

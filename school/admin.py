@@ -2,17 +2,47 @@ from django.contrib import admin
 
 from .models import (
     Course,
+    CourseInterest,
     CoursePurchase,
     Lesson,
     LessonSession,
     PaymentRecord,
+    PageVisit,
+    PurchaseWhitelist,
     Quiz,
     QuizQuestion,
     StripeEvent,
     Subscription,
     UsageRecord,
+    UserCourse,
     UserProfile,
 )
+
+
+@admin.register(PurchaseWhitelist)
+class PurchaseWhitelistAdmin(admin.ModelAdmin):
+    list_display = ("user", "created_at", "created_by")
+    search_fields = ("user__email", "user__username")
+
+
+@admin.register(CourseInterest)
+class CourseInterestAdmin(admin.ModelAdmin):
+    list_display = ("user", "course", "created_at")
+    search_fields = ("user__email", "course__title")
+
+
+@admin.register(UserCourse)
+class UserCourseAdmin(admin.ModelAdmin):
+    list_display = ("user", "course", "last_lesson", "last_accessed_at", "hidden_at")
+    search_fields = ("user__email", "course__title")
+    list_filter = ("hidden_at",)
+
+
+@admin.register(PageVisit)
+class PageVisitAdmin(admin.ModelAdmin):
+    list_display = ("visitor_id", "ip_address", "category", "visit_count", "last_user", "last_visited_at")
+    search_fields = ("visitor_id", "ip_address", "category", "last_user__email")
+    readonly_fields = ("first_visited_at", "last_visited_at")
 
 
 @admin.register(CoursePurchase)

@@ -7,8 +7,8 @@
 <section class="hero">
     <div class="hero-inner">
         <h1 class="hero-title">Cosa vuoi imparare oggi?</h1>
-        <p class="hero-subtitle">Inserisci qualsiasi materia o argomento. La 
-tua scuola AI personalizzata farà il resto.</p>
+        <p class="hero-subtitle">Inserisci qualsiasi materia o argomento. <br>
+            La tua scuola personalizzata farà il resto.</p>
 
         <form id="course-form" class="hero-form" autocomplete="off">
             {% csrf_token %}
@@ -31,22 +31,10 @@ tua scuola AI personalizzata farà il resto.</p>
 
         <div class="examples" id="examples">
             <span class="examples-label">Prova:</span>
-            <button class="example-chip" data-subject="Fisica 
-quantistica">Fisica quantistica</button>
-            <button class="example-chip" data-subject="Storia romana">Storia 
-romana</button>
-            <button class="example-chip" data-subject="Python">Python</button>
-            <button class="example-chip" 
-data-subject="Economia">Economia</button>
-            <button class="example-chip" 
-data-subject="Marketing">Marketing</button>
-            <button class="example-chip" data-subject="Biologia 
-molecolare">Biologia molecolare</button>
-            <button class="example-chip" 
-data-subject="Fotografia">Fotografia</button>
+            <span id="example-chips"></span>
         </div>
 
-        <div class="error-message" id="error-message" role="alert" 
+        <div class="app-toast app-toast-error" id="error-message" role="alert"
 hidden></div>
     </div>
 
@@ -100,6 +88,8 @@ const clarificationOptions = document.getElementById('clarification-options');
 const clarificationClose = document.getElementById('clarification-close');
 const clarificationCustomForm = document.getElementById('clarification-custom-form');
 const clarificationCustomInput = document.getElementById('clarification-custom-input');
+const toastStack = document.getElementById('app-toast-stack');
+toastStack.append(errorMessage);
 
 const loadingSteps = [
     'Analizzo l\'argomento',
@@ -110,6 +100,7 @@ let stepIndex = 0;
 let stepInterval = null;
 let pendingSubject = '';
 let suggestionTimer = null;
+let errorTimer = null;
 
 function startLoading() {
     loadingOverlay.hidden = false;
@@ -127,11 +118,15 @@ function stopLoading() {
 }
 
 function showError(msg) {
+    clearTimeout(errorTimer);
     errorMessage.textContent = msg;
+    errorMessage.classList.remove('is-leaving');
     errorMessage.hidden = false;
+    errorTimer = setTimeout(hideError, 5000);
 }
 
 function hideError() {
+    clearTimeout(errorTimer);
     errorMessage.hidden = true;
 }
 
@@ -189,6 +184,13 @@ form.addEventListener('submit', (e) => {
     submitCourse(subject);
 });
 
+subjectInput.addEventListener('keydown', event => {
+    if (event.ctrlKey && event.key === 'Enter') {
+        event.preventDefault();
+        form.requestSubmit();
+    }
+});
+
 function showClarification(question, options) {
     clarificationQuestion.textContent = question;
     clarificationOptions.replaceChildren();
@@ -227,13 +229,42 @@ clarificationModal.addEventListener('click', event => {
     if (event.target === clarificationModal) clarificationModal.hidden = true;
 });
 
-// Example chips
-document.querySelectorAll('.example-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-        subjectInput.value = chip.dataset.subject;
-        subjectInput.focus();
-    });
-});
+// Show a varied selection on every visit while keeping the disciplines balanced.
+const EXAMPLE_CATEGORIES = [
+    ['Fisica quantistica', 'Astronomia', 'Chimica organica', 'Genetica', 'Biologia molecolare', 'Neuroscienze'],
+    ['Storia romana', 'Storia dell\'arte', 'Filosofia', 'Psicologia', 'Geopolitica', 'Letteratura italiana'],
+    ['Python', 'Intelligenza artificiale', 'Data science', 'Cybersecurity', 'Sviluppo web', 'SQL'],
+    ['Economia', 'Marketing', 'Finanza personale', 'Imprenditorialità', 'Project management', 'Economia circolare'],
+    ['Fotografia', 'Design grafico', 'Teoria musicale', 'Scrittura creativa', 'Spagnolo', 'Architettura'],
+    ['Statistica', 'Calcolo infinitesimale', 'Robotica', 'Scienze ambientali', 'Oceanografia', 'Energie rinnovabili'],
+    ['Anatomia umana', 'Nutrizione', 'Microbiologia', 'Sociologia', 'Diritto', 'Comunicazione'],
+    ['Come educare il cane', 'Come imparare a cucinare bene', 'Primo soccorso', 'Giardinaggio', 'Gestione del tempo', 'Public speaking'],
+];
+
+function randomItem(items) {
+    return items[Math.floor(Math.random() * items.length)];
+}
+
+function renderExampleChips() {
+    const container = document.getElementById('example-chips');
+    EXAMPLE_CATEGORIES
+        .map(randomItem)
+        .sort(() => Math.random() - 0.5)
+        .forEach(subject => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'example-chip';
+            chip.dataset.subject = subject;
+            chip.textContent = subject;
+            chip.addEventListener('click', () => {
+                subjectInput.value = subject;
+                subjectInput.focus();
+            });
+            container.append(chip);
+        });
+}
+
+renderExampleChips();
 
 subjectInput.addEventListener('input', () => {
     hideError();

@@ -57,4 +57,4 @@ Registra il webhook `/billing/webhook/` per gli eventi:
 - `invoice.payment_failed`
 
 `USERS_WHITELIST` accetta email separate da virgola e concede accesso completo.
-`MOCK=True` bypassa il paywall in sviluppo e non deve essere usato in produzione.
+`MOCK_TIME` abilita una demo globale per account della durata indicata in minuti (`0` la disattiva). `MOCK=True` abilita invece il checkout simulato e non deve essere usato in produzione.

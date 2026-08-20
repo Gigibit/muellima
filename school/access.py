@@ -8,7 +8,7 @@ from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.utils import timezone
 
-from .models import Course, CoursePurchase, Lesson, Subscription
+from .models import Course, CoursePurchase, Lesson, Subscription, UserCourse
 
 
 def normalized_email(user) -> str:
@@ -16,7 +16,7 @@ def normalized_email(user) -> str:
 
 
 def is_access_bypassed(user) -> bool:
-    return bool(settings.MOCK or (user.is_authenticated and normalized_email(user) in settings.USERS_WHITELIST))
+    return bool(user.is_authenticated and normalized_email(user) in settings.USERS_WHITELIST)
 
 
 def get_subscription(user) -> Subscription:
@@ -31,11 +31,30 @@ def get_course_purchase(user, course) -> CoursePurchase | None:
     return CoursePurchase.objects.filter(user=user, course=course, status="paid").first()
 
 
+def touch_user_course(user, course, *, lesson=None) -> UserCourse | None:
+    if not user.is_authenticated or not course:
+        return None
+    defaults = {"last_accessed_at": timezone.now(), "hidden_at": None}
+    if lesson is not None and lesson.course_id == course.id:
+        defaults["last_lesson"] = lesson
+    history, _ = UserCourse.objects.update_or_create(
+        user=user,
+        course=course,
+        defaults=defaults,
+    )
+    return history
+
+
 def free_trial_seconds_remaining(user, course) -> int:
     if not user.is_authenticated or not course:
         return 0
-    limit = settings.FREE_TRIAL_MINUTES * 60
-    sessions = user.lesson_sessions.filter(is_trial=True, lesson__course=course)
+    if settings.MOCK_TIME > 0:
+        # Demo mode is intentionally global per account, not renewed per course.
+        limit = settings.MOCK_TIME * 60
+        sessions = user.lesson_sessions.filter(is_trial=True)
+    else:
+        limit = settings.FREE_TRIAL_MINUTES * 60
+        sessions = user.lesson_sessions.filter(is_trial=True, lesson__course=course)
     used = sessions.aggregate(total=Sum("duration_seconds"))["total"] or 0
     active_elapsed = sum(
         max(0, int((timezone.now() - started_at).total_seconds()))
@@ -92,7 +111,7 @@ def subscription_required(*, api: bool = False):
             course = _request_course(request, kwargs)
             if not has_lesson_access(request.user, course):
                 if api:
-                    return JsonResponse({"success": False, "error": {"code": "COURSE_PURCHASE_REQUIRED", "message": "Hai terminato i 5 minuti gratuiti per questo corso. Acquistalo per continuare."}}, status=403)
+                    return JsonResponse({"success": False, "error": {"code": "COURSE_PURCHASE_REQUIRED", "message": "Hai terminato il tempo gratuito disponibile. Acquista il corso per continuare."}}, status=403)
                 return redirect(f"/plans/?course_id={course.id}" if course else "/")
             return view_func(request, *args, **kwargs)
         return wrapped

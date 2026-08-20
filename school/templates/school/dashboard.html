@@ -10,21 +10,91 @@
         <div class="metric-card"><span>Utenti</span><strong>{{ user_count }}</strong></div>
         <div class="metric-card"><span>Corsi acquistati</span><strong>{{ active_subscriptions }}</strong></div>
         <div class="metric-card"><span>Ricavi registrati</span><strong>€{{ revenue_cents|euros }}</strong></div>
+        <div class="metric-card"><span>Costi AI stimati</span><strong>${{ estimated_costs.total|usd }}</strong></div>
         <div class="metric-card"><span>Richieste AI</span><strong>{{ totals.requests|default:0 }}</strong></div>
         <div class="metric-card"><span>Token totali</span><strong>{{ totals.total_tokens|default:0 }}</strong></div>
         <div class="metric-card"><span>Immagini</span><strong>{{ totals.images|default:0 }}</strong></div>
+        <div class="metric-card"><span>Prospect / visitatori</span><strong>{{ unique_visitors }}</strong></div>
+        <div class="metric-card"><span>Visite pagina</span><strong>{{ page_visits }}</strong></div>
+        <div class="metric-card"><span>Utenti interessati</span><strong>{{ interested_users_total }}</strong></div>
     </div>
+
+    <h2>Stima costi AI</h2>
+    <p class="dashboard-note">Stima in USD calcolata dai token e dalle immagini registrati, usando le tariffe configurate nell'ambiente.</p>
+    <div class="metric-grid">
+        <div class="metric-card"><span>Testo</span><strong>${{ estimated_costs.text|usd }}</strong></div>
+        <div class="metric-card"><span>Realtime</span><strong>${{ estimated_costs.realtime|usd }}</strong></div>
+        <div class="metric-card"><span>Immagini</span><strong>${{ estimated_costs.images|usd }}</strong></div>
+    </div>
+
+    <h2>Whitelist acquisti</h2>
+    <form method="post" action="{% url 'add_purchase_whitelist' %}" class="dashboard-inline-form">
+        {% csrf_token %}
+        <label for="purchase-whitelist-email">Email utente</label>
+        <input id="purchase-whitelist-email" type="email" name="email" required placeholder="utente@example.com">
+        <button type="submit" class="btn-primary">Aggiungi</button>
+    </form>
+    <div class="table-wrap"><table class="admin-table">
+        <thead><tr><th>Utente</th><th>Aggiunto il</th><th>Da</th><th></th></tr></thead>
+        <tbody>{% for entry in purchase_whitelist %}<tr>
+            <td>{{ entry.user.email|default:entry.user.username }}</td>
+            <td>{{ entry.created_at|date:"d/m/Y H:i" }}</td>
+            <td>{{ entry.created_by.email|default:"—" }}</td>
+            <td><form method="post" action="{% url 'remove_purchase_whitelist' entry.user_id %}">{% csrf_token %}<button type="submit" class="table-action-danger">Rimuovi</button></form></td>
+        </tr>{% empty %}<tr><td colspan="4">Nessun utente abilitato agli acquisti.</td></tr>{% endfor %}</tbody>
+    </table></div>
+
+    <h2>Interesse per corso</h2>
+    <div class="table-wrap"><table class="admin-table">
+        <thead><tr><th>Corso</th><th>Interessati</th></tr></thead>
+        <tbody>{% for course in interests_by_course %}<tr>
+            <td>{{ course.title }}</td><td>{{ course.interested_count }}</td>
+        </tr>{% empty %}<tr><td colspan="2">Nessun interesse registrato.</td></tr>{% endfor %}</tbody>
+    </table></div>
+
+    <h2>Ultimi utenti interessati</h2>
+    <div class="table-wrap"><table class="admin-table">
+        <thead><tr><th>Data</th><th>Utente</th><th>Corso</th></tr></thead>
+        <tbody>{% for interest in course_interests %}<tr>
+            <td>{{ interest.created_at|date:"d/m/Y H:i" }}</td>
+            <td>{{ interest.user.email|default:interest.user.username }}</td>
+            <td>{{ interest.course.title }}</td>
+        </tr>{% empty %}<tr><td colspan="3">Nessun interesse registrato.</td></tr>{% endfor %}</tbody>
+    </table></div>
+
+    <h2>Pagine più visitate</h2>
+    <div class="table-wrap"><table class="admin-table">
+        <thead><tr><th>Pagina</th><th>Visite</th></tr></thead>
+        <tbody>{% for page in top_pages %}<tr>
+            <td>{{ page.label }}</td><td>{{ page.visits }}</td>
+        </tr>{% empty %}<tr><td colspan="2">Nessuna visita registrata.</td></tr>{% endfor %}</tbody>
+    </table></div>
+
+    <h2>Prospect e visitatori</h2>
+    <div class="table-wrap"><table class="admin-table">
+        <thead><tr><th>Utente</th><th>Ultimo UUID noto</th><th>IP</th><th>Visite</th><th>Ultima pagina</th><th>Ultima visita</th></tr></thead>
+        <tbody>{% for visitor in ip_visitors %}<tr>
+            <td>{% if visitor.last_user %}{{ visitor.last_user.email|default:visitor.last_user.username }}{% else %}{{ visitor.visitor_id }}{% endif %}</td>
+            <td>{{ visitor.visitor_id }}</td>
+            <td>{{ visitor.ip_address }}</td>
+            <td>{{ visitor.visits }}</td><td>{{ visitor.last_category }}</td>
+            <td>{{ visitor.last_visited_at|date:"d/m/Y H:i" }}</td>
+        </tr>{% empty %}<tr><td colspan="6">Nessun prospect registrato.</td></tr>{% endfor %}</tbody>
+    </table></div>
 
     <h2>Utilizzo per utente</h2>
     <div class="table-wrap"><table class="admin-table">
-        <thead><tr><th>Utente</th><th>Corsi</th><th>Licenze</th><th>Richieste</th><th>Token</th><th>Immagini</th><th>Pagamenti</th></tr></thead>
+        <thead><tr><th>Utente</th><th>IP</th><th>Pagine visitate</th><th>Corsi</th><th>Licenze</th><th>Richieste</th><th>Token</th><th>Immagini</th><th>Costo AI stimato</th><th>Pagamenti</th></tr></thead>
         <tbody>{% for user in users %}<tr>
             <td>{{ user.email|default:user.username }}</td>
+            <td>{{ user.visit_ips }}</td>
+            <td>{{ user.page_visit_count }}</td>
             <td>{{ user.purchased_course_count }}</td>
             <td>{{ user.purchase_plans }}</td>
             <td>{{ user.usage_requests }}</td><td>{{ user.usage_tokens }}</td><td>{{ user.usage_images }}</td>
+            <td>${{ user.estimated_cost_usd|usd }}</td>
             <td>€{{ user.payments_cents|euros }}</td>
-        </tr>{% empty %}<tr><td colspan="7">Nessun utente.</td></tr>{% endfor %}</tbody>
+        </tr>{% empty %}<tr><td colspan="10">Nessun utente.</td></tr>{% endfor %}</tbody>
     </table></div>
 
     <h2>Ultimi pagamenti</h2>

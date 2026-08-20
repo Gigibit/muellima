@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
-from .models import Course, CoursePurchase, PaymentRecord, StripeEvent, Subscription
+from .models import Course, CoursePurchase, PaymentRecord, StripeEvent, Subscription, UserCourse
 
 
 PLAN_CONFIG = {
@@ -182,6 +182,11 @@ def process_webhook_event(event) -> bool:
                     "stripe_payment_intent_id": obj.get("payment_intent") or "",
                     "purchased_at": timezone.now(),
                 },
+            )
+            UserCourse.objects.update_or_create(
+                user=user,
+                course=course,
+                defaults={"last_accessed_at": timezone.now(), "hidden_at": None},
             )
             PaymentRecord.objects.update_or_create(
                 stripe_invoice_id=obj.get("payment_intent") or obj.get("id"),

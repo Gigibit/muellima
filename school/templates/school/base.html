@@ -4,7 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% block title %}Muellima{% endblock %}</title>
+    <link rel="icon" type="image/png" sizes="1254x1254"
+          href="{% static 'school/images/favicon.png' %}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link 
@@ -15,41 +18,256 @@ rel="stylesheet">
 </head>
 <body>
     <nav class="navbar">
-        <a href="/" class="navbar-brand">
-            <span class="brand-icon">🎓</span>
-            <span class="brand-text">Muellima</span>
+        <a href="/" class="navbar-brand" aria-label="Muellima — Home">
+            <img src="{% static 'school/images/muellima-logo.png' %}"
+                 class="brand-logo" alt="Muellima">
         </a>
         <div class="navbar-actions">
             {% if request.user.is_authenticated %}
                 {% if request.user.is_staff %}<a href="{% url 'staff_dashboard' %}" class="nav-link">Dashboard</a>{% endif %}
-                <a href="{% url 'profile' %}" class="profile-nav" aria-label="Apri il profilo">
+                <button type="button" class="profile-nav" id="account-drawer-trigger"
+                        aria-label="Apri menu account" aria-controls="account-drawer"
+                        aria-expanded="false">
                     <span class="profile-avatar">{{ request.user.school_profile.display_name|default:request.user.email|first|upper }}</span>
                     <span class="profile-nav-meta">
                         <span class="profile-nav-label">{{ request.user.school_profile.display_name|default:request.user.email|firstword }}</span>
                         <small>
                             {% if nav_access_bypassed %}Accesso completo
                             {% elif nav_course_count %}{{ nav_course_count }} cors{{ nav_course_count|pluralize:"o,i" }}
+                            {% elif nav_demo_mode %}Demo di {{ nav_demo_minutes }} min
                             {% else %}5 min gratis per corso{% endif %}
                         </small>
                     </span>
-                </a>
+                </button>
             {% else %}
                 <a href="{% url 'login' %}" class="nav-link">Accedi</a>
             {% endif %}
         </div>
     </nav>
 
-    <main class="main-content">
-        {% if messages %}
-            <div class="messages" aria-live="polite">
-                {% for message in messages %}
-                    <div class="message message-{{ message.tags }}">{{ message }}</div>
-                {% endfor %}
+    {% if request.user.is_authenticated %}
+    <div class="account-drawer-shell" id="account-drawer-shell" hidden>
+        <button class="account-drawer-backdrop" id="account-drawer-backdrop"
+                type="button" aria-label="Chiudi menu account"></button>
+        <aside class="account-drawer" id="account-drawer" aria-label="Menu account" tabindex="-1">
+            <header class="account-drawer-header">
+                <div>
+                    <span class="account-drawer-eyebrow">Il tuo spazio</span>
+                    <strong>{{ request.user.school_profile.display_name|default:request.user.email|firstword }}</strong>
+                </div>
+                <button type="button" class="account-drawer-close" id="account-drawer-close"
+                        aria-label="Chiudi menu">×</button>
+            </header>
+
+            <a href="{% url 'profile' %}" class="account-drawer-profile-link">
+                <span class="profile-avatar">{{ request.user.school_profile.display_name|default:request.user.email|first|upper }}</span>
+                <span><strong>Profilo</strong><small>Nome, preferenze e piano</small></span>
+                <span aria-hidden="true">→</span>
+            </a>
+
+            <div class="account-history-heading">
+                <h2>I tuoi corsi</h2>
+                <span id="account-history-count"></span>
             </div>
-        {% endif %}
+            <div class="account-history" id="account-history">
+                <div class="account-history-list" id="account-history-list"></div>
+                <button class="account-history-state" id="account-history-state"
+                        type="button">Caricamento corsi…</button>
+                <div class="account-history-sentinel" id="account-history-sentinel" aria-hidden="true"></div>
+            </div>
+        </aside>
+    </div>
+    {% endif %}
+
+    <div class="app-toast-stack" id="app-toast-stack" aria-live="polite" aria-atomic="false">
+        {% for message in messages %}
+            <div class="app-toast app-toast-{{ message.tags|default:'info' }}" role="status">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+
+    <main class="main-content">
         {% block content %}{% endblock %}
     </main>
 
+    <script>
+    document.querySelectorAll('#app-toast-stack .app-toast').forEach(toast => {
+        window.setTimeout(() => {
+            toast.classList.add('is-leaving');
+            toast.addEventListener('animationend', () => toast.remove(), { once: true });
+            window.setTimeout(() => toast.remove(), 250);
+        }, 5000);
+    });
+
+    const drawerTrigger = document.getElementById('account-drawer-trigger');
+    if (drawerTrigger) {
+        const drawerShell = document.getElementById('account-drawer-shell');
+        const drawer = document.getElementById('account-drawer');
+        const drawerClose = document.getElementById('account-drawer-close');
+        const drawerBackdrop = document.getElementById('account-drawer-backdrop');
+        const history = document.getElementById('account-history');
+        const historyList = document.getElementById('account-history-list');
+        const historyState = document.getElementById('account-history-state');
+        const historySentinel = document.getElementById('account-history-sentinel');
+        const historyCount = document.getElementById('account-history-count');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+        let historyCursor = null;
+        let historyLoading = false;
+        let historyEnded = false;
+        let historyLoaded = false;
+        let renderedCourses = 0;
+        let drawerCloseTimer = null;
+
+        function openAccountDrawer() {
+            clearTimeout(drawerCloseTimer);
+            drawerShell.hidden = false;
+            document.body.classList.add('drawer-open');
+            requestAnimationFrame(() => drawerShell.classList.add('is-open'));
+            drawerTrigger.setAttribute('aria-expanded', 'true');
+            drawerClose.focus();
+            if (!historyLoaded) loadCourseHistory();
+        }
+
+        function closeAccountDrawer() {
+            drawerShell.classList.remove('is-open');
+            document.body.classList.remove('drawer-open');
+            drawerTrigger.setAttribute('aria-expanded', 'false');
+            drawerCloseTimer = setTimeout(() => {
+                drawerShell.hidden = true;
+                drawerTrigger.focus();
+            }, 240);
+        }
+
+        function makeHistoryItem(item) {
+            const article = document.createElement('article');
+            article.className = 'account-history-item';
+            article.dataset.courseId = item.course_id;
+
+            const top = document.createElement('div');
+            top.className = 'account-history-item-top';
+            const title = document.createElement('strong');
+            title.textContent = item.title;
+            const hide = document.createElement('button');
+            hide.type = 'button';
+            hide.className = 'account-history-hide';
+            hide.textContent = 'Nascondi';
+            hide.setAttribute('aria-label', `Nascondi ${item.title} dalla cronologia`);
+            hide.addEventListener('click', () => hideCourse(item, article, hide));
+            top.append(title, hide);
+
+            const meta = document.createElement('div');
+            meta.className = 'account-history-meta';
+            const date = new Intl.DateTimeFormat('it-IT', { dateStyle: 'medium' })
+                .format(new Date(item.last_accessed_at));
+            meta.textContent = `${item.difficulty} · ${item.access_label} · ${date}`;
+
+            const progress = document.createElement('div');
+            progress.className = 'account-history-progress';
+            const progressText = document.createElement('span');
+            progressText.textContent = `${item.completed_lessons} di ${item.total_lessons} lezioni`;
+            const progressTrack = document.createElement('span');
+            progressTrack.className = 'account-history-progress-track';
+            const progressValue = document.createElement('span');
+            const percentage = item.total_lessons ? (item.completed_lessons / item.total_lessons) * 100 : 0;
+            progressValue.style.width = `${Math.min(100, percentage)}%`;
+            progressTrack.append(progressValue);
+            progress.append(progressText, progressTrack);
+
+            const resume = document.createElement('a');
+            resume.className = 'account-history-resume';
+            resume.href = item.resume_url;
+            resume.textContent = item.access_available ? 'Riprendi →' : 'Scegli un piano →';
+            article.append(top, meta, progress, resume);
+            return article;
+        }
+
+        async function hideCourse(item, article, button) {
+            button.disabled = true;
+            try {
+                const response = await fetch(`/api/me/courses/history/${item.course_id}/hide/`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken },
+                });
+                if (!response.ok) throw new Error();
+                article.remove();
+                renderedCourses = Math.max(0, renderedCourses - 1);
+                historyCount.textContent = renderedCourses ? String(renderedCourses) : '';
+                if (!historyList.children.length && historyEnded) {
+                    historyState.textContent = 'Non ci sono corsi nella cronologia.';
+                    historyState.hidden = false;
+                }
+                if (!historyEnded) loadCourseHistory();
+            } catch (error) {
+                button.disabled = false;
+                historyState.textContent = 'Non è stato possibile nascondere il corso.';
+                historyState.hidden = false;
+            }
+        }
+
+        async function loadCourseHistory() {
+            if (historyLoading || historyEnded) return;
+            historyLoading = true;
+            historyState.disabled = true;
+            historyState.hidden = false;
+            historyState.textContent = historyLoaded ? 'Caricamento…' : 'Caricamento corsi…';
+            try {
+                const url = historyCursor
+                    ? `/api/me/courses/history/?cursor=${encodeURIComponent(historyCursor)}`
+                    : '/api/me/courses/history/';
+                const response = await fetch(url);
+                if (!response.ok) throw new Error();
+                const data = await response.json();
+                data.items.forEach(item => historyList.append(makeHistoryItem(item)));
+                renderedCourses += data.items.length;
+                historyCount.textContent = renderedCourses ? String(renderedCourses) : '';
+                historyCursor = data.next_cursor;
+                historyEnded = !historyCursor;
+                historyLoaded = true;
+                historyState.hidden = Boolean(renderedCourses) || !historyEnded;
+                if (!renderedCourses && historyEnded) {
+                    historyState.textContent = 'Non ci sono ancora corsi nella cronologia.';
+                    historyState.hidden = false;
+                }
+            } catch (error) {
+                historyState.textContent = 'Cronologia non disponibile. Tocca per riprovare.';
+                historyState.hidden = false;
+            } finally {
+                historyLoading = false;
+                historyState.disabled = false;
+            }
+        }
+
+        const historyObserver = new IntersectionObserver(entries => {
+            if (entries.some(entry => entry.isIntersecting)) loadCourseHistory();
+        }, { root: history, rootMargin: '160px' });
+        historyObserver.observe(historySentinel);
+        historyState.addEventListener('click', loadCourseHistory);
+
+        drawerTrigger.addEventListener('click', openAccountDrawer);
+        drawerClose.addEventListener('click', closeAccountDrawer);
+        drawerBackdrop.addEventListener('click', closeAccountDrawer);
+        document.addEventListener('keydown', event => {
+            if (drawerShell.hidden) return;
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeAccountDrawer();
+            } else if (event.key === 'Tab') {
+                const focusable = [...drawer.querySelectorAll('a[href], button:not(:disabled)')];
+                if (!focusable.length) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                }
+            }
+        });
+    }
+    </script>
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>

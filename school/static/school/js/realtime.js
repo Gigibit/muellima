@@ -20,12 +20,11 @@
     const startBtn = document.getElementById('start-lesson-btn');
     const micBtn = document.getElementById('mic-btn');
     const quizBtn = document.getElementById('quiz-btn');
-    const endBtn = document.getElementById('end-btn');
     const statusText = document.getElementById('status-text');
     const statusDot = document.querySelector('.status-dot');
     const waveform = document.getElementById('waveform');
     const avatarWrap = document.getElementById('professor-avatar-wrap');
-    const toast = document.getElementById('toast');
+    const professorBlob = document.getElementById('professor-blob');
     const remoteAudio = document.getElementById('remote-audio');
     const illustrationArea = document.getElementById('illustration-area');
     const illustrationImg = document.getElementById('illustration-img');
@@ -40,6 +39,18 @@
     const writtenExampleClose = document.getElementById('written-example-close');
     const lessonComplete = document.getElementById('lesson-complete');
     const lessonCompleteSummary = document.getElementById('lesson-complete-summary');
+    const lessonPage = document.querySelector('.lesson-page');
+
+    const detailPanels = [lessonComplete, illustrationArea, writtenExampleArea];
+    function syncLessonLayout() {
+        const hasVisibleDetail = detailPanels.some(panel => panel && !panel.hidden);
+        lessonPage.classList.toggle('has-lesson-detail', hasVisibleDetail);
+    }
+    const detailObserver = new MutationObserver(syncLessonLayout);
+    detailPanels.forEach(panel => {
+        if (panel) detailObserver.observe(panel, { attributes: true, attributeFilter: ['hidden'] });
+    });
+    syncLessonLayout();
 
     // ── State ─────────────────────────────────────────────────────
     let pc = null;               // RTCPeerConnection
@@ -52,10 +63,17 @@
     let openingInstruction = '';
     let lessonSessionId = null;
     let trialTimer = null;
+    let trialDeadline = null;
+    let trialExpirationStarted = false;
     let sessionEndReported = false;
     let responseActive = false;
     let quizPaused = false;
     const handledToolCallIds = new Set();
+    let remoteAudioContext = null;
+    let remoteAudioSource = null;
+    let remoteAudioAnalyser = null;
+    let blobAnimationFrame = null;
+    let smoothedAudioLevel = 0;
 
     // ── Status management ──────────────────────────────────────────
     const STATUS_MAP = {
@@ -89,12 +107,61 @@
 'professor_speaking');
     }
 
-    function showToast(msg, duration = 4000) {
+    window.addEventListener('personal-school:lesson-completed', event => {
+        const summary = event.detail?.summary || 'Hai completato la lezione.';
+        lessonCompleteSummary.textContent = summary;
+        lessonComplete.hidden = false;
+        quizBtn.disabled = false;
+        if (event.detail?.notification) {
+            showToast(event.detail.notification, 4000, 'success');
+        }
+    });
+
+    function showToast(msg, duration = 4000, type = 'error') {
+        const toast = document.createElement('div');
+        toast.className = `app-toast app-toast-${type}`;
+        toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
         toast.textContent = msg;
-        toast.hidden = false;
-        clearTimeout(toast._timer);
-        toast._timer = setTimeout(() => { toast.hidden = true; }, duration);
+        document.getElementById('app-toast-stack').append(toast);
+        setTimeout(() => {
+            toast.classList.add('is-leaving');
+            toast.addEventListener('animationend', () => toast.remove(), { once: true });
+            setTimeout(() => toast.remove(), 250);
+        }, duration);
     }
+
+    function blurpProfessor() {
+        professorBlob.classList.remove('blurping');
+        void professorBlob.offsetWidth;
+        professorBlob.classList.add('blurping');
+        setTimeout(() => professorBlob.classList.remove('blurping'), 580);
+
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        const context = new AudioContextClass();
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        const now = context.currentTime;
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(190, now);
+        oscillator.frequency.exponentialRampToValueAtTime(78, now + 0.22);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.13, now + 0.025);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(now);
+        oscillator.stop(now + 0.26);
+        oscillator.addEventListener('ended', () => context.close().catch(() => {}));
+    }
+
+    professorBlob.addEventListener('click', blurpProfessor);
+    professorBlob.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            blurpProfessor();
+        }
+    });
 
     // ── WebRTC support check ──────────────────────────────────────
     function checkWebRTCSupport() {
@@ -103,9 +170,30 @@
                typeof navigator.mediaDevices.getUserMedia !== 'undefined';
     }
 
+    function setStartButtonState(state) {
+        const states = {
+            ready: { icon: '▶', label: 'Inizia lezione' },
+            loading: { icon: '…', label: 'Sto preparando il professore' },
+            active: { icon: '', label: 'Interrompi lezione' },
+        };
+        const next = states[state] || states.ready;
+        startBtn.textContent = next.icon;
+        startBtn.classList.toggle('is-stop', state === 'active');
+        startBtn.setAttribute('aria-label', next.label);
+        startBtn.title = next.label;
+    }
+
     // ── Enable controls when lesson selected ──────────────────────
-    combobox.addEventListener('change', () => {
+    combobox.addEventListener('change', async () => {
         const val = combobox.value;
+        if (isConnected && currentLessonId && val !== String(currentLessonId)) {
+            const confirmed = window.confirm('Sicuro di voler interrompere la lezione corrente?');
+            if (!confirmed) {
+                combobox.value = String(currentLessonId);
+                return;
+            }
+            await stopCurrentLesson();
+        }
         startBtn.disabled = !val;
     });
 
@@ -117,6 +205,11 @@
 
     // ── Start lesson ──────────────────────────────────────────────
     startBtn.addEventListener('click', async () => {
+        if (isConnected) {
+            await stopCurrentLesson({ notify: true });
+            return;
+        }
+
         currentLessonId = combobox.value;
         if (!currentLessonId) return;
 
@@ -126,7 +219,8 @@
         }
 
         startBtn.disabled = true;
-        startBtn.textContent = 'Sto preparando il professore...';
+        combobox.disabled = true;
+        setStartButtonState('loading');
         setStatus('connecting');
 
         try {
@@ -136,7 +230,8 @@
             setStatus('error');
             showToast(err.message || 'Impossibile avviare la sessione.');
             startBtn.disabled = false;
-            startBtn.textContent = 'Inizia lezione';
+            combobox.disabled = false;
+            setStartButtonState('ready');
         }
     });
 
@@ -195,6 +290,7 @@
         // 4. Set up remote audio
         pc.ontrack = (event) => {
             remoteAudio.srcObject = event.streams[0];
+            startBlobAudioReaction(event.streams[0]);
         };
 
         // 5. Create DataChannel for Realtime events
@@ -219,8 +315,9 @@
                 // Enable controls
                 micBtn.disabled = false;
                 quizBtn.disabled = false;
-                endBtn.hidden = false;
-                startBtn.textContent = 'Lezione in corso';
+                combobox.disabled = false;
+                setStartButtonState('active');
+                startBtn.disabled = false;
                 startTrialCountdown(tokenData.trial_seconds_remaining);
                 // Set initial listening state
                 setTimeout(() => setStatus('listening'), 1000);
@@ -230,6 +327,9 @@
                     setStatus('error');
                     showToast('Connessione persa. Riprova.');
                     cleanup();
+                    currentLessonId = null;
+                    setStartButtonState('ready');
+                    startBtn.disabled = !combobox.value;
                 }
             }
         };
@@ -264,20 +364,94 @@
         });
     }
 
+    function startBlobAudioReaction(stream) {
+        stopBlobAudioReaction();
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+
+        remoteAudioContext = new AudioContextClass();
+        remoteAudioSource = remoteAudioContext.createMediaStreamSource(stream);
+        remoteAudioAnalyser = remoteAudioContext.createAnalyser();
+        remoteAudioAnalyser.fftSize = 256;
+        remoteAudioAnalyser.smoothingTimeConstant = 0.72;
+        remoteAudioSource.connect(remoteAudioAnalyser);
+        remoteAudioContext.resume().catch(() => {});
+
+        const samples = new Uint8Array(remoteAudioAnalyser.fftSize);
+        const animateBlob = () => {
+            remoteAudioAnalyser.getByteTimeDomainData(samples);
+            let energy = 0;
+            for (const sample of samples) {
+                const normalized = (sample - 128) / 128;
+                energy += normalized * normalized;
+            }
+            const rms = Math.sqrt(energy / samples.length);
+            smoothedAudioLevel += (rms - smoothedAudioLevel) * 0.28;
+            const intensity = Math.min(smoothedAudioLevel * 3.2, 0.32);
+            const wobble = Math.sin(performance.now() / 150) * intensity;
+            professorBlob.style.transform = (
+                `scale(${1 + intensity}) ` +
+                `scaleX(${1 + wobble * 0.22}) ` +
+                `scaleY(${1 - wobble * 0.16}) ` +
+                `rotate(${wobble * 3}deg)`
+            );
+            blobAnimationFrame = requestAnimationFrame(animateBlob);
+        };
+        animateBlob();
+    }
+
+    function stopBlobAudioReaction() {
+        if (blobAnimationFrame) cancelAnimationFrame(blobAnimationFrame);
+        blobAnimationFrame = null;
+        if (remoteAudioSource) remoteAudioSource.disconnect();
+        remoteAudioSource = null;
+        remoteAudioAnalyser = null;
+        if (remoteAudioContext) remoteAudioContext.close().catch(() => {});
+        remoteAudioContext = null;
+        smoothedAudioLevel = 0;
+        if (professorBlob) professorBlob.style.transform = '';
+    }
+
     function startTrialCountdown(secondsRemaining) {
         if (secondsRemaining === null || secondsRemaining === undefined) return;
         clearTimeout(trialTimer);
         const seconds = Math.max(0, Number(secondsRemaining) || 0);
-        trialTimer = setTimeout(async () => {
-            await reportSessionEnd();
-            cleanup();
-            setStatus('disconnected');
-            showToast('Hai terminato i 5 minuti gratuiti. Scegli un piano per continuare.', 6000);
-            setTimeout(() => {
-                window.location.href = `/plans/?course_id=${encodeURIComponent(window.PS_COURSE_ID)}`;
-            }, 1800);
-        }, seconds * 1000);
+        trialDeadline = Date.now() + seconds * 1000;
+        trialExpirationStarted = false;
+        checkTrialDeadline();
     }
+
+    function checkTrialDeadline() {
+        clearTimeout(trialTimer);
+        if (trialDeadline === null || trialExpirationStarted) return;
+        const millisecondsRemaining = trialDeadline - Date.now();
+        if (millisecondsRemaining <= 0) {
+            expireTrial();
+            return;
+        }
+        trialTimer = setTimeout(checkTrialDeadline, Math.min(millisecondsRemaining, 1000));
+    }
+
+    async function expireTrial() {
+        if (trialExpirationStarted) return;
+        trialExpirationStarted = true;
+        const reporting = reportSessionEnd();
+        cleanup();
+        await reporting;
+        currentLessonId = null;
+        setStatus('disconnected');
+        setStartButtonState('ready');
+        startBtn.disabled = !combobox.value;
+        showToast('Hai terminato i 5 minuti gratuiti. Scegli un piano per continuare.', 6000, 'warning');
+        setTimeout(() => {
+            window.location.href = `/plans/?course_id=${encodeURIComponent(window.PS_COURSE_ID)}`;
+        }, 1800);
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) checkTrialDeadline();
+    });
+    window.addEventListener('pageshow', checkTrialDeadline);
 
     async function reportSessionEnd({ keepalive = false } = {}) {
         if (!lessonSessionId || sessionEndReported) return;
@@ -415,6 +589,8 @@
                 input_tokens: usage.input_tokens || 0,
                 output_tokens: usage.output_tokens || 0,
                 total_tokens: usage.total_tokens || 0,
+                audio_input_tokens: usage.input_token_details?.audio_tokens || 0,
+                audio_output_tokens: usage.output_token_details?.audio_tokens || 0,
             }),
         }).catch(err => console.warn('Usage reporting failed:', err));
     }
@@ -490,12 +666,12 @@
             });
             if (!resp.ok) throw new Error('Lesson completion API error');
 
-            lessonCompleteSummary.textContent = summary;
-            lessonComplete.hidden = false;
-            quizBtn.disabled = false;
-            showToast('Lezione completata. Puoi fare il quiz.');
             window.dispatchEvent(new CustomEvent('personal-school:lesson-completed', {
-                detail: { lessonId: Number(currentLessonId), summary },
+                detail: {
+                    lessonId: Number(currentLessonId),
+                    summary,
+                    notification: 'Lezione completata. Puoi fare il quiz.',
+                },
             }));
             sendFunctionCallOutput(callId, {
                 completed: true,
@@ -596,23 +772,26 @@
         localStream.getTracks().forEach(track => {
             track.enabled = micEnabled;
         });
-        micBtn.classList.toggle('active', micEnabled);
-        micBtn.querySelector('.control-label').textContent = micEnabled ? 
-'Microfono' : 'Mutato';
+        micBtn.classList.toggle('muted', !micEnabled);
+        const micLabel = micEnabled ? 'Disattiva microfono' : 'Attiva microfono';
+        micBtn.setAttribute('aria-label', micLabel);
+        micBtn.title = micLabel;
     });
 
-    // Initialize mic button as active
-    micBtn.classList.add('active');
+    // Initialize microphone FAB as unmuted
+    micBtn.classList.remove('muted');
 
     // ── End session ──────────────────────────────────────────────
-    endBtn.addEventListener('click', async () => {
-        await reportSessionEnd();
+    async function stopCurrentLesson({ notify = false } = {}) {
+        const reporting = reportSessionEnd();
         cleanup();
+        await reporting;
         setStatus('disconnected');
-        startBtn.disabled = false;
-        startBtn.textContent = 'Inizia lezione';
-        showToast('Lezione terminata.');
-    });
+        currentLessonId = null;
+        startBtn.disabled = !combobox.value;
+        setStartButtonState('ready');
+        if (notify) showToast('Lezione terminata.', 4000, 'success');
+    }
 
     // ── Cleanup ───────────────────────────────────────────────────
     function cleanup() {
@@ -624,6 +803,7 @@
         quizPaused = false;
         clearTimeout(trialTimer);
         trialTimer = null;
+        trialDeadline = null;
 
         // Close DataChannel
         if (dc) {
@@ -651,8 +831,9 @@
         // Reset UI
         micBtn.disabled = true;
         quizBtn.disabled = true;
-        endBtn.hidden = true;
+        combobox.disabled = false;
         remoteAudio.srcObject = null;
+        stopBlobAudioReaction();
     }
 
     // ── Cleanup on page unload ───────────────────────────────────
@@ -665,6 +846,9 @@
     window.PS_Realtime = {
         pauseForQuiz: () => {
             quizPaused = true;
+            micBtn.classList.add('muted');
+            micBtn.setAttribute('aria-label', 'Microfono sospeso durante il quiz');
+            micBtn.title = 'Microfono sospeso durante il quiz';
             if (localStream) {
                 localStream.getTracks().forEach(t => { t.enabled = false; });
             }
@@ -677,6 +861,10 @@
         },
         resumeAfterQuiz: () => {
             quizPaused = false;
+            micBtn.classList.toggle('muted', !micEnabled);
+            const micLabel = micEnabled ? 'Disattiva microfono' : 'Attiva microfono';
+            micBtn.setAttribute('aria-label', micLabel);
+            micBtn.title = micLabel;
             remoteAudio.play().catch(() => {});
             if (localStream && micEnabled) {
                 localStream.getTracks().forEach(t => { t.enabled = true; });

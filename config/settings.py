@@ -1,5 +1,6 @@
 """Django settings for Muellima."""
 from pathlib import Path
+from decimal import Decimal
 import os
 from dotenv import load_dotenv
 
@@ -13,7 +14,20 @@ SECRET_KEY = os.environ.get(
 )
 DEBUG = os.environ.get("DJANGO_DEBUG", "True").lower() in ("true", "1", "yes")
 MOCK = os.environ.get("MOCK", "False").lower() in ("true", "1", "yes")
-ALLOWED_HOSTS = ["*"] if DEBUG else []
+
+
+def env_list(name: str, default: str = "") -> list[str]:
+    return [value.strip() for value in os.environ.get(name, default).split(",") if value.strip()]
+
+
+ALLOWED_HOSTS = ["*"] if DEBUG else env_list(
+    "DJANGO_ALLOWED_HOSTS",
+    "muellima.com,www.muellima.com",
+)
+CSRF_TRUSTED_ORIGINS = env_list(
+    "CSRF_TRUSTED_ORIGINS",
+    "https://muellima.com,https://www.muellima.com",
+)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -36,6 +50,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "school.middleware.PageVisitMiddleware",
     "allauth.account.middleware.AccountMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -93,6 +108,12 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Enable only behind a trusted proxy that overwrites X-Real-IP/X-Forwarded-For.
+TRUST_PROXY_IP_HEADERS = os.environ.get("TRUST_PROXY_IP_HEADERS", "False").lower() in ("true", "1", "yes")
+TRUST_HTTPS_PROXY = os.environ.get("TRUST_HTTPS_PROXY", "False").lower() in ("true", "1", "yes")
+if TRUST_HTTPS_PROXY:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
     "allauth.account.auth_backends.AuthenticationBackend",
@@ -143,9 +164,19 @@ OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
 OPENAI_REALTIME_VOICE = os.environ.get("OPENAI_REALTIME_VOICE", "alloy")
 OPENAI_TIMEOUT = 60  # seconds
 
+# Dashboard-only cost estimates. OpenAI prices are expressed in USD.
+OPENAI_TEXT_INPUT_USD_PER_1M = Decimal(os.environ.get("OPENAI_TEXT_INPUT_USD_PER_1M", "2.50"))
+OPENAI_TEXT_OUTPUT_USD_PER_1M = Decimal(os.environ.get("OPENAI_TEXT_OUTPUT_USD_PER_1M", "10.00"))
+OPENAI_REALTIME_TEXT_INPUT_USD_PER_1M = Decimal(os.environ.get("OPENAI_REALTIME_TEXT_INPUT_USD_PER_1M", "4.00"))
+OPENAI_REALTIME_TEXT_OUTPUT_USD_PER_1M = Decimal(os.environ.get("OPENAI_REALTIME_TEXT_OUTPUT_USD_PER_1M", "24.00"))
+OPENAI_REALTIME_AUDIO_INPUT_USD_PER_1M = Decimal(os.environ.get("OPENAI_REALTIME_AUDIO_INPUT_USD_PER_1M", "32.00"))
+OPENAI_REALTIME_AUDIO_OUTPUT_USD_PER_1M = Decimal(os.environ.get("OPENAI_REALTIME_AUDIO_OUTPUT_USD_PER_1M", "64.00"))
+OPENAI_IMAGE_USD_PER_IMAGE = Decimal(os.environ.get("OPENAI_IMAGE_USD_PER_IMAGE", "0.042"))
+
 MIN_LESSON = int(os.environ.get("MIN_LESSON", "10"))
 MAX_LESSON = int(os.environ.get("MAX_LESSON", "24"))
 FREE_TRIAL_MINUTES = int(os.environ.get("FREE_TRIAL_MINUTES", "5"))
+MOCK_TIME = int(os.environ.get("MOCK_TIME", "0"))
 
 USERS_WHITELIST = {
     email.strip().casefold()
@@ -162,6 +193,8 @@ if MAX_LESSON < MIN_LESSON:
     raise ValueError("MAX_LESSON deve essere maggiore o uguale a MIN_LESSON")
 if FREE_TRIAL_MINUTES < 0:
     raise ValueError("FREE_TRIAL_MINUTES non può essere negativo")
+if MOCK_TIME < 0:
+    raise ValueError("MOCK_TIME non può essere negativo")
 
 # Application logs must remain visible in the runserver console, including
 # exceptions raised while calling external AI and payment services.
