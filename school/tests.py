@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .access import free_trial_seconds_remaining
+from .agents import ProfessorAgent, QuizAgent
 from .forms import UserProfileForm
 from .billing import process_webhook_event
 from .models import CourseInterest, CoursePurchase, LessonSession, PageVisit, PaymentRecord, PurchaseWhitelist, StripeEvent, Subscription, UsageRecord, UserCourse
@@ -141,6 +142,9 @@ class HomePageTests(TestCase):
         self.assertContains(response, "Scrittura creativa")
         self.assertContains(response, "Come educare il cane")
         self.assertContains(response, "Come imparare a cucinare bene")
+        self.assertContains(response, "Agente lezioni")
+        self.assertContains(response, "Agente professore")
+        self.assertContains(response, "Agente quiz")
         self.assertContains(response, "event.ctrlKey && event.key === 'Enter'")
 
     def test_clarification_modal_allows_custom_input(self):
@@ -203,6 +207,43 @@ class CurriculumGenerationTests(TestCase):
         self.assertEqual(client.responses.create.call_count, 2)
         retry_schema = client.responses.create.call_args_list[1].kwargs["text"]["format"]["schema"]
         self.assertEqual(retry_schema["properties"]["lessons"]["minItems"], 10)
+        self.assertEqual(curriculum["_agent"]["name"], "lesson_creation_agent")
+        self.assertEqual(curriculum["_agent"]["attempts"], 2)
+        self.assertEqual(curriculum["_usage"]["input_tokens"], 220)
+        self.assertEqual(curriculum["_usage"]["output_tokens"], 700)
+
+
+class AgentArchitectureTests(TestCase):
+    def test_quiz_agent_retries_invalid_output_with_validation_feedback(self):
+        invalid = {"title": "Quiz", "questions": []}
+        valid_questions = [
+            {
+                "question": f"Domanda {index}",
+                "options": ["A", "B", "C", "D"],
+                "correct_index": 0,
+                "explanation": "Spiegazione",
+            }
+            for index in range(5)
+        ]
+        valid = {"title": "Quiz", "questions": valid_questions}
+        outputs = [(invalid, {"input_tokens": 10}), (valid, {"output_tokens": 20})]
+        feedback_seen = []
+
+        def execute(attempt, feedback):
+            feedback_seen.append(feedback)
+            return outputs[attempt - 1]
+
+        result = QuizAgent().run(execute, QuizAgent.validate)
+
+        self.assertEqual(result["_agent"]["attempts"], 2)
+        self.assertIn("5 a 10", feedback_seen[1])
+        self.assertEqual(result["_usage"]["total_tokens"], 30)
+
+    def test_professor_agent_marks_realtime_tool_loop(self):
+        result = ProfessorAgent().run(lambda: {"ephemeral_key": "secret"})
+
+        self.assertEqual(result["agent"]["name"], "professor_agent")
+        self.assertEqual(result["agent"]["mode"], "realtime_tool_loop")
 
 
 class UserProfileTests(TestCase):

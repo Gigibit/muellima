@@ -394,11 +394,16 @@ def generate_course(request):
         )
 
     usage = curriculum.pop("_usage", None)
+    agent_trace = curriculum.pop("_agent", None)
     record_usage(
         request.user,
         "curriculum",
         usage,
-        metadata={"subject": cache_key, "clarification": bool(clarification)},
+        metadata={
+            "subject": cache_key,
+            "clarification": bool(clarification),
+            "agent": agent_trace,
+        },
     )
 
     if not curriculum.get("valid"):
@@ -415,6 +420,7 @@ def generate_course(request):
             "needs_clarification": True,
             "question": question,
             "options": options[:10],
+            "agent": agent_trace,
         })
 
     lessons_data = curriculum.get("lessons", [])
@@ -454,7 +460,11 @@ def generate_course(request):
 
     touch_user_course(request.user, course)
 
-    return JsonResponse({"success": True, "course_id": course.id})
+    return JsonResponse({
+        "success": True,
+        "course_id": course.id,
+        "agent": agent_trace,
+    })
 
 
 @require_GET
@@ -677,8 +687,14 @@ def generate_quiz(request, lesson_id: int):
         )
 
     usage = quiz_data.pop("_usage", None)
-    record_usage(request.user, "quiz", usage, metadata={"lesson_id": lesson.id})
-    return JsonResponse({"success": True, **quiz_data})
+    agent_trace = quiz_data.pop("_agent", None)
+    record_usage(
+        request.user,
+        "quiz",
+        usage,
+        metadata={"lesson_id": lesson.id, "agent": agent_trace},
+    )
+    return JsonResponse({"success": True, "agent": agent_trace, **quiz_data})
 
 
 @csrf_protect

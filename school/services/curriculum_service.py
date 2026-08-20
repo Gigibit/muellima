@@ -7,6 +7,7 @@ from openai import OpenAI
 
 from django.conf import settings
 
+from ..agents import LessonCreationAgent
 from .openai_client import get_client
 
 # ── JSON Schema for structured course output 
@@ -146,53 +147,38 @@ def generate_curriculum(
     if clarification:
         user_input += f"\nSpecificazione scelta dallo studente: {clarification}"
 
-    schema = deepcopy(COURSE_SCHEMA)
-    if clarification:
-        schema["properties"]["lessons"]["minItems"] = settings.MIN_LESSON
+    agent = LessonCreationAgent()
 
-    response = client.responses.create(
-        model=settings.OPENAI_TEXT_MODEL,
-        instructions=SYSTEM_PROMPT,
-        input=user_input,
-        text={
-            "format": {
-                "type": "json_schema",
-                "name": "course_curriculum",
-                "schema": schema,
-                "strict": True,
-            }
-        },
-    )
-
-    parsed = json.loads(response.output_text)
-
-    if (
-        parsed.get("valid")
-        and not parsed.get("needs_clarification")
-        and len(parsed.get("lessons", [])) < settings.MIN_LESSON
-    ):
-        constrained_schema = deepcopy(COURSE_SCHEMA)
-        constrained_schema["properties"]["lessons"]["minItems"] = settings.MIN_LESSON
+    def execute(attempt: int, feedback: str):
+        schema = deepcopy(COURSE_SCHEMA)
+        if clarification or attempt > 1:
+            schema["properties"]["lessons"]["minItems"] = settings.MIN_LESSON
+        iteration_input = user_input
+        format_name = "course_curriculum"
+        if feedback:
+            iteration_input += (
+                "\nL'argomento è già sufficientemente specifico. "
+                f"Genera ora il corso completo con almeno {settings.MIN_LESSON} "
+                "lezioni distinte e non chiedere altri chiarimenti. "
+                f"Correggi inoltre questo problema di validazione: {feedback}"
+            )
+            format_name = "course_curriculum_complete"
         response = client.responses.create(
             model=settings.OPENAI_TEXT_MODEL,
             instructions=SYSTEM_PROMPT,
-            input=(
-                f"{user_input}\nL'argomento è già sufficientemente specifico. "
-                f"Genera ora il corso completo con almeno {settings.MIN_LESSON} "
-                f"lezioni distinte e non chiedere altri chiarimenti."
-            ),
+            input=iteration_input,
             text={
                 "format": {
                     "type": "json_schema",
-                    "name": "course_curriculum_complete",
-                    "schema": constrained_schema,
+                    "name": format_name,
+                    "schema": schema,
                     "strict": True,
                 }
             },
         )
-        parsed = json.loads(response.output_text)
+        return json.loads(response.output_text), response.usage
 
-    parsed["_usage"] = response.usage
+    parsed = agent.run(execute, agent.validate)
 
     if parsed.get("valid") and not parsed.get("needs_clarification"):
         lesson_count = len(parsed.get("lessons", []))

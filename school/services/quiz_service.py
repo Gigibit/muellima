@@ -6,6 +6,7 @@ from openai import OpenAI
 
 from django.conf import settings
 
+from ..agents import QuizAgent
 from .openai_client import get_client
 from ..models import Lesson, Quiz, QuizQuestion
 
@@ -91,22 +92,28 @@ Lesson content outline:
 Generate a quiz for this lesson.
 """
 
-    response = client.responses.create(
-        model=settings.OPENAI_TEXT_MODEL,
-        instructions=QUIZ_SYSTEM_PROMPT,
-        input=user_prompt,
-        text={
-            "format": {
-                "type": "json_schema",
-                "name": "lesson_quiz",
-                "schema": QUIZ_SCHEMA,
-                "strict": True,
-            }
-        },
-    )
+    agent = QuizAgent()
 
-    data = json.loads(response.output_text)
-    usage = response.usage
+    def execute(attempt: int, feedback: str):
+        iteration_input = user_prompt
+        if feedback:
+            iteration_input += f"\nCorreggi il quiz precedente: {feedback}"
+        response = client.responses.create(
+            model=settings.OPENAI_TEXT_MODEL,
+            instructions=QUIZ_SYSTEM_PROMPT,
+            input=iteration_input,
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "lesson_quiz",
+                    "schema": QUIZ_SCHEMA,
+                    "strict": True,
+                }
+            },
+        )
+        return json.loads(response.output_text), response.usage
+
+    data = agent.run(execute, agent.validate)
 
     # Persist to database
     quiz = Quiz.objects.create(lesson=lesson)
@@ -120,5 +127,4 @@ Generate a quiz for this lesson.
             order=idx,
         )
 
-    data["_usage"] = usage
     return data

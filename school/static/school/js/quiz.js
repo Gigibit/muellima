@@ -50,7 +50,7 @@
         quizBody.innerHTML = `
             <div class="quiz-loading">
                 <div class="loading-spinner"></div>
-                <p>Sto preparando il quiz...</p>
+                <p>L’agente dei quiz prepara le domande...</p>
             </div>
         `;
         resetScore();

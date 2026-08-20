@@ -163,6 +163,7 @@ OPENAI_TEXT_MODEL = os.environ.get("OPENAI_TEXT_MODEL", "gpt-4o-2024-11-20")
 OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-1")
 OPENAI_REALTIME_VOICE = os.environ.get("OPENAI_REALTIME_VOICE", "alloy")
 OPENAI_TIMEOUT = 60  # seconds
+AGENT_MAX_ITERATIONS = int(os.environ.get("AGENT_MAX_ITERATIONS", "2"))
 
 # Dashboard-only cost estimates. OpenAI prices are expressed in USD.
 OPENAI_TEXT_INPUT_USD_PER_1M = Decimal(os.environ.get("OPENAI_TEXT_INPUT_USD_PER_1M", "2.50"))
@@ -195,6 +196,8 @@ if FREE_TRIAL_MINUTES < 0:
     raise ValueError("FREE_TRIAL_MINUTES non può essere negativo")
 if MOCK_TIME < 0:
     raise ValueError("MOCK_TIME non può essere negativo")
+if not 1 <= AGENT_MAX_ITERATIONS <= 3:
+    raise ValueError("AGENT_MAX_ITERATIONS deve essere compreso tra 1 e 3")
 
 # Application logs must remain visible in the runserver console, including
 # exceptions raised while calling external AI and payment services.

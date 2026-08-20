@@ -9,6 +9,11 @@
         <h1 class="hero-title">Cosa vuoi imparare oggi?</h1>
         <p class="hero-subtitle">Inserisci qualsiasi materia o argomento. <br>
             La tua scuola personalizzata farà il resto.</p>
+        <div class="agent-lineup" aria-label="Agenti specializzati Muellima">
+            <span>Agente lezioni</span>
+            <span>Agente professore</span>
+            <span>Agente quiz</span>
+        </div>
 
         <form id="course-form" class="hero-form" autocomplete="off">
             {% csrf_token %}
@@ -65,8 +70,8 @@ hidden></div>
     <div class="loading-overlay" id="loading-overlay" hidden>
         <div class="loading-card">
             <div class="loading-spinner"></div>
-            <h2 class="loading-title">Sto preparando il tuo corso...</h2>
-            <p class="loading-step" id="loading-step">Analizzo l'argomento</p>
+            <h2 class="loading-title">L’agente didattico prepara il tuo corso...</h2>
+            <p class="loading-step" id="loading-step">Progetto il percorso di lezioni</p>
         </div>
     </div>
 </section>
@@ -92,7 +97,7 @@ const toastStack = document.getElementById('app-toast-stack');
 toastStack.append(errorMessage);
 
 const loadingSteps = [
-    'Analizzo l\'argomento',
+    'Progetto il percorso di lezioni',
     'Creo il percorso didattico',
     'Organizzo le lezioni',
 ];

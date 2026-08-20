@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 from django.conf import settings
 
+from ..agents import ProfessorAgent
 from ..models import Lesson
 
 logger = logging.getLogger(__name__)
@@ -305,7 +306,7 @@ Quando hai completato tutti gli obiettivi della lezione:
 """
 
 
-def create_realtime_session(
+def _create_realtime_session(
     lesson: Lesson,
     learner_name: str = "",
     reasoning_effort: str = "low",
@@ -402,3 +403,23 @@ def create_realtime_session(
         "opening_instruction": build_opening_instruction(lesson),
         "reasoning_effort": reasoning_effort,
     }
+
+
+def create_realtime_session(
+    lesson: Lesson,
+    learner_name: str = "",
+    reasoning_effort: str = "low",
+    learning_context: str = "",
+    allow_illustrations: bool = True,
+    allow_written_examples: bool = True,
+) -> dict[str, Any]:
+    """Start the modular Realtime professor agent."""
+    agent = ProfessorAgent()
+    return agent.run(lambda: _create_realtime_session(
+        lesson,
+        learner_name=learner_name,
+        reasoning_effort=reasoning_effort,
+        learning_context=learning_context,
+        allow_illustrations=allow_illustrations,
+        allow_written_examples=allow_written_examples,
+    ))
